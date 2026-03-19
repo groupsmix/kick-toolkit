@@ -16,6 +16,7 @@ import {
   Clock,
   BarChart3,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ChatLog {
   id: string;
@@ -35,9 +36,9 @@ interface ChatStats {
   top_chatters: { username: string; count: number }[];
 }
 
-const CHANNEL = "demo_streamer";
-
 export function ChatLogsPage() {
+  const { user } = useAuth();
+  const channel = user?.streamer_channel || user?.name || "";
   const [logs, setLogs] = useState<ChatLog[]>([]);
   const [stats, setStats] = useState<ChatStats | null>(null);
   const [search, setSearch] = useState("");
@@ -49,7 +50,7 @@ export function ChatLogsPage() {
 
   const fetchLogs = async () => {
     try {
-      const params = new URLSearchParams({ channel: CHANNEL });
+      const params = new URLSearchParams({ channel });
       if (search) params.set("search", search);
       if (flaggedOnly) params.set("flagged_only", "true");
       if (selectedUser) params.set("username", selectedUser);
@@ -69,11 +70,11 @@ export function ChatLogsPage() {
     setLoading(true);
     Promise.all([
       fetchLogs(),
-      api<ChatStats>(`/api/chatlogs/stats/${CHANNEL}`).then(setStats),
+      api<ChatStats>(`/api/chatlogs/stats/${channel}`).then(setStats),
     ])
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [channel]);
 
   useEffect(() => {
     fetchLogs();

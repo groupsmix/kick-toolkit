@@ -14,9 +14,11 @@ import {
   TrendingUp,
   Activity,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const { data: stats, isLoading, error, refetch } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats"],
@@ -50,7 +52,7 @@ export function DashboardPage() {
       icon: MessageSquare,
       color: "text-blue-400",
       bg: "bg-blue-500/10",
-      change: `${stats.total_messages} total`,
+      change: "All time",
     },
     {
       title: "Unique Chatters",
@@ -58,7 +60,7 @@ export function DashboardPage() {
       icon: Users,
       color: "text-purple-400",
       bg: "bg-purple-500/10",
-      change: `${stats.unique_users} tracked`,
+      change: "All time",
     },
     {
       title: "Flagged Messages",
@@ -66,7 +68,7 @@ export function DashboardPage() {
       icon: ShieldAlert,
       color: "text-red-400",
       bg: "bg-red-500/10",
-      change: `-${stats.moderation_rate}%`,
+      change: `${stats.moderation_rate}% rate`,
     },
     {
       title: "Active Giveaways",
@@ -115,7 +117,7 @@ export function DashboardPage() {
       {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-transparent border border-emerald-500/20 p-6">
         <div className="relative z-10">
-          <h2 className="text-2xl font-bold text-white mb-1">Welcome back, Streamer!</h2>
+          <h2 className="text-2xl font-bold text-white mb-1">Welcome back, {user?.name || "Streamer"}!</h2>
           <p className="text-zinc-400">
             Your toolkit is running smoothly. Here's what's happening on your channel.
           </p>

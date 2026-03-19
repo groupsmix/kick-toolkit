@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Gamepad2,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Participant {
   username: string;
@@ -52,9 +53,9 @@ interface Tournament {
   created_at: string;
 }
 
-const CHANNEL = "demo_streamer";
-
 export function TournamentPage() {
+  const { user } = useAuth();
+  const channel = user?.streamer_channel || user?.name || "";
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTournament, setSelectedTournament] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export function TournamentPage() {
 
   useEffect(() => {
     setLoading(true);
-    api<Tournament[]>(`/api/tournament?channel=${CHANNEL}`)
+    api<Tournament[]>(`/api/tournament?channel=${channel}`)
       .then((data) => {
         setTournaments(data);
         if (data.length > 0 && !selectedTournament) {
@@ -86,7 +87,7 @@ export function TournamentPage() {
         toast.error("Failed to load tournaments");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [channel]);
 
   const selected = tournaments.find((t) => t.id === selectedTournament);
 
@@ -94,7 +95,7 @@ export function TournamentPage() {
     if (!newTourney.name) return;
     const t = await api<Tournament>("/api/tournament/create", {
       method: "POST",
-      body: JSON.stringify({ ...newTourney, channel: CHANNEL }),
+      body: JSON.stringify({ ...newTourney, channel }),
     });
     setTournaments([t, ...tournaments]);
     setSelectedTournament(t.id);
