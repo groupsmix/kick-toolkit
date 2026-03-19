@@ -6,11 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { api } from "@/hooks/useApi";
 import {
   Search,
-  Filter,
   AlertTriangle,
   MessageSquare,
   User,

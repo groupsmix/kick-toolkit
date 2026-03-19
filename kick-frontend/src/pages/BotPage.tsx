@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   MessageSquare,
   Send,
-  Pencil,
   Lock,
 } from "lucide-react";
 
