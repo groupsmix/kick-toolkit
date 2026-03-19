@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +32,7 @@ const navItems = [
   { path: "/anticheat", label: "Anti-Cheat", icon: ShieldCheck, premium: true },
   { path: "/tournament", label: "Tournament", icon: Trophy },
   { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
+  { path: "/analytics", label: "Predictive Analytics", icon: BarChart3, premium: true },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {

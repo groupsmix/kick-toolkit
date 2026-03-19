@@ -16,6 +16,7 @@ from app.routers.anticheat import router as anticheat_router
 from app.routers.tournament import router as tournament_router
 from app.routers.ideas import router as ideas_router
 from app.routers.subscription import router as subscription_router, webhook_router
+from app.routers.analytics import router as analytics_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -92,6 +93,7 @@ app.include_router(tournament_router)
 app.include_router(ideas_router)
 app.include_router(subscription_router)
 app.include_router(webhook_router)
+app.include_router(analytics_router)
 
 
 @app.get("/healthz")
