@@ -20,6 +20,7 @@ import {
   Send,
   Lock,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface BotCommand {
   name: string;
@@ -46,9 +47,9 @@ interface ModerationResult {
   confidence: number;
 }
 
-const CHANNEL = "demo_streamer";
-
 export function BotPage() {
+  const { user } = useAuth();
+  const channel = user?.streamer_channel || user?.name || "";
   const [commands, setCommands] = useState<BotCommand[]>([]);
   const [modRules, setModRules] = useState<ModRule[]>([]);
   const [newCmd, setNewCmd] = useState({ name: "", response: "", cooldown: 5, mod_only: false });
@@ -62,19 +63,19 @@ export function BotPage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      api<BotCommand[]>(`/api/bot/commands/${CHANNEL}`).then(setCommands),
-      api<ModRule[]>(`/api/moderation/rules/${CHANNEL}`).then(setModRules),
+      api<BotCommand[]>(`/api/bot/commands/${channel}`).then(setCommands),
+      api<ModRule[]>(`/api/moderation/rules/${channel}`).then(setModRules),
     ])
       .catch((err) => {
         setError(err.message || "Failed to load bot data");
         toast.error("Failed to load bot data");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [channel]);
 
   const addCommand = async () => {
     if (!newCmd.name || !newCmd.response) return;
-    const cmd = await api<BotCommand>(`/api/bot/commands/${CHANNEL}`, {
+    const cmd = await api<BotCommand>(`/api/bot/commands/${channel}`, {
       method: "POST",
       body: JSON.stringify({ ...newCmd, enabled: true }),
     });
@@ -86,7 +87,7 @@ export function BotPage() {
 
   const deleteCommand = async (name: string) => {
     try {
-      await api(`/api/bot/commands/${CHANNEL}/${name}`, { method: "DELETE" });
+      await api(`/api/bot/commands/${channel}/${name}`, { method: "DELETE" });
       setCommands(commands.filter((c) => c.name !== name));
       toast.success(`Command !${name} deleted`);
     } catch {
@@ -95,7 +96,7 @@ export function BotPage() {
   };
 
   const toggleRule = async (rule: ModRule) => {
-    const updated = await api<ModRule>(`/api/moderation/rules/${CHANNEL}/${rule.id}`, {
+    const updated = await api<ModRule>(`/api/moderation/rules/${channel}/${rule.id}`, {
       method: "PUT",
       body: JSON.stringify({ ...rule, enabled: !rule.enabled }),
     });
@@ -107,7 +108,7 @@ export function BotPage() {
     if (!testMessage) return;
     const result = await api<ModerationResult>("/api/moderation/analyze", {
       method: "POST",
-      body: JSON.stringify({ username: "test_user", message: testMessage, channel: CHANNEL }),
+      body: JSON.stringify({ username: user?.name || "viewer", message: testMessage, channel }),
     });
     setModResult(result);
   };

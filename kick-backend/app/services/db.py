@@ -219,9 +219,8 @@ async def seed_demo_data():
 
         # Bot commands
         commands = [
-            (channel, "socials", "Follow me on Twitter @demo_streamer and Instagram @demo_streamer!", 30, True, False),
-            (channel, "discord", "Join our Discord: https://discord.gg/example", 30, True, False),
-            (channel, "rank", "Current rank: Diamond 2 | Peak: Master", 10, True, False),
+            (channel, "socials", "Follow me on Twitter and Instagram! Links in the panels below.", 30, True, False),
+            (channel, "discord", "Join our Discord! Link in the panels below.", 30, True, False),
             (channel, "lurk", "{username} is now lurking! Enjoy the vibes.", 5, True, False),
             (channel, "ban", "Banned {target} from chat.", 0, True, True),
         ]

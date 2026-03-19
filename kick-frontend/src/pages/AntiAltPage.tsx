@@ -20,6 +20,7 @@ import {
   Eye,
   Crown,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface FlaggedAccount {
   username: string;
@@ -42,9 +43,9 @@ interface AntiAltSettings {
   whitelisted_users: string[];
 }
 
-const CHANNEL = "demo_streamer";
-
 export function AntiAltPage() {
+  const { user } = useAuth();
+  const channel = user?.streamer_channel || user?.name || "";
   const [flagged, setFlagged] = useState<FlaggedAccount[]>([]);
   const [settings, setSettings] = useState<AntiAltSettings | null>(null);
   const [checkUsername, setCheckUsername] = useState("");
@@ -65,14 +66,14 @@ export function AntiAltPage() {
         toast.error("Failed to load anti-alt data");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [channel]);
 
   const checkUser = async () => {
     if (!checkUsername) return;
     setChecking(true);
     const result = await api<FlaggedAccount>("/api/antialt/check", {
       method: "POST",
-      body: JSON.stringify({ username: checkUsername, channel: CHANNEL }),
+      body: JSON.stringify({ username: checkUsername, channel }),
     });
     setCheckResult(result);
     setChecking(false);

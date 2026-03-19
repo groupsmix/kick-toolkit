@@ -20,6 +20,7 @@ import {
   Trash2,
   UserPlus,
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface GiveawayEntry {
   username: string;
@@ -41,9 +42,9 @@ interface Giveaway {
   created_at: string;
 }
 
-const CHANNEL = "demo_streamer";
-
 export function GiveawayPage() {
+  const { user } = useAuth();
+  const channel = user?.streamer_channel || user?.name || "";
   const [giveaways, setGiveaways] = useState<Giveaway[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [rolling, setRolling] = useState<string | null>(null);
@@ -63,14 +64,14 @@ export function GiveawayPage() {
 
   useEffect(() => {
     setLoading(true);
-    api<Giveaway[]>(`/api/giveaway?channel=${CHANNEL}`)
+    api<Giveaway[]>(`/api/giveaway?channel=${channel}`)
       .then(setGiveaways)
       .catch((err) => {
         setError(err.message || "Failed to load giveaways");
         toast.error("Failed to load giveaways");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [channel]);
 
   const createGiveaway = async () => {
     if (!newGw.title) return;
@@ -78,7 +79,7 @@ export function GiveawayPage() {
       method: "POST",
       body: JSON.stringify({
         ...newGw,
-        channel: CHANNEL,
+        channel,
         max_entries: newGw.max_entries || null,
         min_account_age_days: 0,
       }),
