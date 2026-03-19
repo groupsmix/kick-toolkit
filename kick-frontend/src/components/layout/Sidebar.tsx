@@ -31,6 +31,8 @@ import {
   Vote,
   TrendingUp,
   LanguagesIcon,
+  Eye,
+  Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -70,6 +72,9 @@ const navItems: NavItem[] = [
   { path: "/polls", label: "Chat Polls", icon: Vote },
   { path: "/predictions", label: "Predictions", icon: TrendingUp },
   { path: "/translation", label: "Translation", icon: LanguagesIcon },
+  { type: "separator", label: "Analytics & Tracking" },
+  { path: "/viewer-count", label: "Viewer Count", icon: Eye, premium: true },
+  { path: "/notifications", label: "Go-Live Alerts", icon: Bell },
   { type: "separator", label: "Streamer Intelligence" },
   { path: "/stream-intel", label: "Stream Intelligence", icon: Activity, premium: true },
   { path: "/viewer-crm", label: "Viewer CRM", icon: Heart, premium: true },

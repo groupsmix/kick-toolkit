@@ -18,6 +18,8 @@ import {
   Trash2,
   Star,
   TrendingUp,
+  RefreshCw,
+  Search,
 } from "lucide-react";
 
 interface HighlightMarker {
@@ -74,6 +76,7 @@ export function HighlightsPage() {
 
   const [summary, setSummary] = useState<HighlightSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detecting, setDetecting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -89,6 +92,22 @@ export function HighlightsPage() {
   useEffect(() => {
     if (channel) fetchData();
   }, [channel, fetchData]);
+
+  const detectHypeMoments = async () => {
+    setDetecting(true);
+    try {
+      const result = await api<{ moments_detected: number }>(
+        `/api/highlights/detect/${channel}`,
+        { method: "POST" }
+      );
+      toast.success(`Detected ${result.moments_detected} hype moment(s)!`);
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to detect hype moments");
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const deleteHighlight = async (id: string) => {
     try {
@@ -117,17 +136,31 @@ export function HighlightsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-orange-500/20 via-red-500/10 to-transparent border border-orange-500/20 p-6">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-1">
-            <Zap className="w-6 h-6 text-orange-400" />
-            <h2 className="text-2xl font-bold text-white">Auto-Highlight Detection</h2>
-            <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px] uppercase font-bold">
-              Pro
-            </Badge>
+        <div className="relative z-10 flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-6 h-6 text-orange-400" />
+              <h2 className="text-2xl font-bold text-white">Auto-Highlight Detection</h2>
+              <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-[10px] uppercase font-bold">
+                Pro
+              </Badge>
+            </div>
+            <p className="text-zinc-400">
+              Automatically detect hype moments from chat activity spikes. Find your best clip-worthy timestamps.
+            </p>
           </div>
-          <p className="text-zinc-400">
-            Automatically detect hype moments from chat activity spikes. Find your best clip-worthy timestamps.
-          </p>
+          <Button
+            onClick={detectHypeMoments}
+            disabled={detecting}
+            className="bg-orange-500 hover:bg-orange-600 text-black"
+          >
+            {detecting ? (
+              <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+            ) : (
+              <Search className="w-4 h-4 mr-1" />
+            )}
+            Detect Hype Moments
+          </Button>
         </div>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10">
           <Zap className="w-32 h-32 text-orange-500" />

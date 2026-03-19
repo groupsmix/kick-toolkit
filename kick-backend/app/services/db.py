@@ -945,6 +945,28 @@ CREATE TABLE IF NOT EXISTS translation_settings (
     show_original BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TEXT NOT NULL
 );
+
+-- ========== Phase 3: Go-Live Notification Settings ==========
+CREATE TABLE IF NOT EXISTS notification_settings (
+    channel TEXT PRIMARY KEY,
+    go_live_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    webhook_urls JSONB NOT NULL DEFAULT '[]',
+    discord_webhook_url TEXT NOT NULL DEFAULT '',
+    notification_message TEXT NOT NULL DEFAULT '{channel} is now live!',
+    notify_on_title_change BOOLEAN NOT NULL DEFAULT FALSE,
+    notify_on_game_change BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS notification_log (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    notification_type TEXT NOT NULL DEFAULT 'go_live',
+    message TEXT NOT NULL DEFAULT '',
+    targets JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'sent',
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -1467,5 +1489,35 @@ async def seed_demo_data():
                VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
             (channel, True, "en", False, True, now),
         )
+
+        # ========== Phase 3: Notification Settings ==========
+        await conn.execute(
+            """INSERT INTO notification_settings
+               (channel, go_live_enabled, webhook_urls, discord_webhook_url,
+                notification_message, notify_on_title_change, notify_on_game_change, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (channel, True,
+             json.dumps(["https://hooks.example.com/stream-alerts"]),
+             "https://discord.com/api/webhooks/example/token",
+             "{channel} is now live! Playing {game} — {title}",
+             True, True, now),
+        )
+
+        # Notification history
+        notif_times = [
+            base_time - timedelta(days=6),
+            base_time - timedelta(days=4),
+            base_time - timedelta(days=1),
+        ]
+        for nt in notif_times:
+            await conn.execute(
+                """INSERT INTO notification_log
+                   (id, channel, notification_type, message, targets, status, created_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (_generate_id(), channel, "go_live",
+                 f"{channel} is now live! Playing Valorant — Road to Immortal",
+                 json.dumps(["discord:https://discord.com/api/...", "webhook:https://hooks.example..."]),
+                 "sent", nt.isoformat()),
+            )
 
         await conn.commit()

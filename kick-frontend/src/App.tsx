@@ -33,6 +33,8 @@ import { DebriefPage } from "@/pages/DebriefPage";
 import { DiscordBotPage } from "@/pages/DiscordBotPage";
 import { RevenuePage } from "@/pages/RevenuePage";
 import { HighlightsPage } from "@/pages/HighlightsPage";
+import { ViewerCountPage } from "@/pages/ViewerCountPage";
+import { NotificationsPage } from "@/pages/NotificationsPage";
 import { PollsPage } from "@/pages/PollsPage";
 import { PredictionsPage } from "@/pages/PredictionsPage";
 import { TranslationPage } from "@/pages/TranslationPage";
@@ -335,6 +337,26 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <HighlightsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/viewer-count"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ViewerCountPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <NotificationsPage />
             </AppLayout>
           </ProtectedRoute>
         }

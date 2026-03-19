@@ -133,3 +133,64 @@ async def get_growth_narrative(
 ) -> dict:
     narrative = await analytics_service.get_growth_narrative(channel)
     return {"narrative": narrative}
+
+
+# ---------------------------------------------------------------------------
+# Viewer Count Tracker (Historical Graphs)
+# ---------------------------------------------------------------------------
+
+@router.get("/viewercount/{channel}")
+async def get_viewer_count_history(
+    channel: str,
+    period: str = Query(default="week", regex="^(day|week|month)$"),
+    _session: dict = Depends(require_auth),
+) -> dict:
+    """Return time-series viewer data for historical graphs."""
+    from app.services.db import get_conn
+
+    async with get_conn() as conn:
+        # Get data from heatmap_snapshots (per-minute granularity)
+        cur = await conn.execute(
+            """SELECT timestamp, viewer_count, chatter_count
+               FROM heatmap_snapshots
+               WHERE channel = %s
+               ORDER BY timestamp DESC LIMIT %s""",
+            (channel, {"day": 1440, "week": 10080, "month": 43200}[period]),
+        )
+        snapshots = [dict(r) for r in await cur.fetchall()]
+
+        # Get session data for peak/avg context
+        cur = await conn.execute(
+            """SELECT started_at, ended_at, peak_viewers, avg_viewers, duration_minutes, title, game
+               FROM stream_intel_sessions
+               WHERE channel = %s
+               ORDER BY started_at DESC LIMIT 20""",
+            (channel,),
+        )
+        sessions = [dict(r) for r in await cur.fetchall()]
+
+        # Get overall stats from snapshots
+        cur = await conn.execute(
+            """SELECT
+                 MAX(peak_viewers) AS all_time_peak,
+                 AVG(avg_viewers) AS avg_viewers,
+                 SUM(hours_streamed) AS total_hours
+               FROM streamer_snapshots WHERE channel = %s""",
+            (channel,),
+        )
+        stats_row = await cur.fetchone()
+
+    stats = dict(stats_row) if stats_row else {}
+    snapshots.reverse()  # chronological order
+
+    return {
+        "channel": channel,
+        "period": period,
+        "viewer_timeline": snapshots,
+        "sessions": sessions,
+        "stats": {
+            "all_time_peak": stats.get("all_time_peak") or 0,
+            "avg_viewers": round(float(stats.get("avg_viewers") or 0), 1),
+            "total_hours_streamed": round(float(stats.get("total_hours") or 0), 1),
+        },
+    }

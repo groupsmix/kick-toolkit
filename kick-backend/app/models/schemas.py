@@ -1416,3 +1416,34 @@ class TranslationSettings(BaseModel):
     auto_translate: bool = False
     show_original: bool = True
     updated_at: Optional[str] = None
+
+
+# ========== Go-Live Notifications ==========
+class NotificationSettingsUpdate(BaseModel):
+    go_live_enabled: bool = False
+    webhook_urls: list[str] = []
+    discord_webhook_url: str = ""
+    notification_message: str = "{channel} is now live! Playing {game} — {title}"
+    notify_on_title_change: bool = False
+    notify_on_game_change: bool = False
+
+
+class NotificationSettings(BaseModel):
+    channel: str
+    go_live_enabled: bool = False
+    webhook_urls: list[str] = []
+    discord_webhook_url: str = ""
+    notification_message: str = "{channel} is now live! Playing {game} — {title}"
+    notify_on_title_change: bool = False
+    notify_on_game_change: bool = False
+    updated_at: Optional[str] = None
+
+
+class NotificationLogEntry(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    notification_type: str = "go_live"
+    message: str = ""
+    targets: list[str] = []
+    status: str = "sent"
+    created_at: Optional[str] = None
