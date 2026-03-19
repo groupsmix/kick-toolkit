@@ -13,6 +13,7 @@ import { AntiCheatPage } from "@/pages/AntiCheatPage";
 import { TournamentPage } from "@/pages/TournamentPage";
 import { IdeasPage } from "@/pages/IdeasPage";
 import { AnalyticsPage } from "@/pages/AnalyticsPage";
+import { StreamCoachPage } from "@/pages/StreamCoachPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -160,6 +161,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <AnalyticsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/coach"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <StreamCoachPage />
             </AppLayout>
           </ProtectedRoute>
         }

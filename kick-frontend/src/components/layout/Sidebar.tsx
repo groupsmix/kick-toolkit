@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Zap,
   BarChart3,
+  Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,6 +34,7 @@ const navItems = [
   { path: "/tournament", label: "Tournament", icon: Trophy },
   { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
   { path: "/analytics", label: "Predictive Analytics", icon: BarChart3, premium: true },
+  { path: "/coach", label: "AI Stream Coach", icon: Brain, premium: true },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
