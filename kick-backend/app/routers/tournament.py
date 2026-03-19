@@ -1,189 +1,129 @@
 """Tournament organizer router."""
 
-import random
+import json
 import math
-from fastapi import APIRouter
+import random
+
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.dependencies import require_auth
 from app.models.schemas import TournamentCreate, TournamentParticipant
-from app.services.database import tournaments, generate_id, now_iso
+from app.services.db import get_conn, _generate_id, _now_iso
 
 router = APIRouter(prefix="/api/tournament", tags=["tournament"])
 
 
 @router.get("")
-async def list_tournaments(channel: str = "") -> list[dict]:
-    result = list(tournaments.values())
-    if channel:
-        result = [t for t in result if t["channel"] == channel]
-    return sorted(result, key=lambda x: x["created_at"], reverse=True)
+async def list_tournaments(channel: str = "", _session: dict = Depends(require_auth)) -> list[dict]:
+    async with get_conn() as conn:
+        if channel:
+            row = await conn.execute(
+                "SELECT * FROM tournaments WHERE channel = %s ORDER BY created_at DESC", (channel,)
+            )
+        else:
+            row = await conn.execute("SELECT * FROM tournaments ORDER BY created_at DESC")
+        tournaments = await row.fetchall()
+    return [dict(t) for t in tournaments]
 
 
 @router.post("/create")
-async def create_tournament(data: TournamentCreate) -> dict:
-    t_id = generate_id()
-    tournament = {
-        "id": t_id,
-        **data.model_dump(),
-        "status": "registration",
-        "participants": [],
-        "matches": [],
-        "current_round": 0,
-        "winner": None,
-        "created_at": now_iso(),
-        "started_at": None,
-        "ended_at": None,
+async def create_tournament(data: TournamentCreate, _session: dict = Depends(require_auth)) -> dict:
+    t_id = _generate_id()
+    now = _now_iso()
+    async with get_conn() as conn:
+        await conn.execute(
+            """INSERT INTO tournaments (id, name, channel, game, max_participants, format, keyword,
+               status, participants, matches, current_round, winner, created_at, started_at, ended_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (t_id, data.name, data.channel, data.game, data.max_participants, data.format,
+             data.keyword, "registration", "[]", "[]", 0, None, now, None, None),
+        )
+        await conn.commit()
+    return {
+        "id": t_id, **data.model_dump(), "status": "registration",
+        "participants": [], "matches": [], "current_round": 0,
+        "winner": None, "created_at": now, "started_at": None, "ended_at": None,
     }
-    tournaments[t_id] = tournament
-    return tournament
 
 
 @router.get("/{tournament_id}")
-async def get_tournament(tournament_id: str) -> dict:
-    if tournament_id in tournaments:
-        return tournaments[tournament_id]
-    return {"error": "Tournament not found"}
+async def get_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        t = await row.fetchone()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return dict(t)
 
 
 @router.post("/{tournament_id}/register")
-async def register_participant(tournament_id: str, participant: TournamentParticipant) -> dict:
-    if tournament_id not in tournaments:
-        return {"error": "Tournament not found"}
+async def register_participant(tournament_id: str, participant: TournamentParticipant, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        t = await row.fetchone()
 
-    t = tournaments[tournament_id]
-    if t["status"] != "registration":
-        return {"error": "Registration is closed"}
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        if t["status"] != "registration":
+            raise HTTPException(status_code=400, detail="Registration is closed")
 
-    if len(t["participants"]) >= t["max_participants"]:
-        return {"error": "Tournament is full"}
+        participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
 
-    existing = [p for p in t["participants"] if p["username"].lower() == participant.username.lower()]
-    if existing:
-        return {"error": "Already registered"}
+        if len(participants) >= t["max_participants"]:
+            raise HTTPException(status_code=400, detail="Tournament is full")
+        if any(p["username"].lower() == participant.username.lower() for p in participants):
+            raise HTTPException(status_code=409, detail="Already registered")
 
-    p_data = {
-        "username": participant.username,
-        "seed": len(t["participants"]) + 1,
-        "eliminated": False,
-    }
-    t["participants"].append(p_data)
-    return {"status": "registered", "participant": p_data, "total_participants": len(t["participants"])}
+        p_data = {"username": participant.username, "seed": len(participants) + 1, "eliminated": False}
+        participants.append(p_data)
+
+        await conn.execute(
+            "UPDATE tournaments SET participants = %s WHERE id = %s",
+            (json.dumps(participants), tournament_id),
+        )
+        await conn.commit()
+
+    return {"status": "registered", "participant": p_data, "total_participants": len(participants)}
 
 
 @router.post("/{tournament_id}/register-batch")
-async def register_batch(tournament_id: str, usernames: list[str]) -> dict:
-    """Register multiple participants at once (from keyword collection)."""
-    if tournament_id not in tournaments:
-        return {"error": "Tournament not found"}
+async def register_batch(tournament_id: str, usernames: list[str], _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        t = await row.fetchone()
 
-    t = tournaments[tournament_id]
-    registered = []
-    skipped = []
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
 
-    for username in usernames:
-        if len(t["participants"]) >= t["max_participants"]:
-            skipped.append({"username": username, "reason": "Tournament full"})
-            continue
+        participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
+        registered = []
+        skipped = []
 
-        existing = [p for p in t["participants"] if p["username"].lower() == username.lower()]
-        if existing:
-            skipped.append({"username": username, "reason": "Already registered"})
-            continue
+        for username in usernames:
+            if len(participants) >= t["max_participants"]:
+                skipped.append({"username": username, "reason": "Tournament full"})
+                continue
+            if any(p["username"].lower() == username.lower() for p in participants):
+                skipped.append({"username": username, "reason": "Already registered"})
+                continue
+            p_data = {"username": username, "seed": len(participants) + 1, "eliminated": False}
+            participants.append(p_data)
+            registered.append(p_data)
 
-        p_data = {
-            "username": username,
-            "seed": len(t["participants"]) + 1,
-            "eliminated": False,
-        }
-        t["participants"].append(p_data)
-        registered.append(p_data)
+        await conn.execute(
+            "UPDATE tournaments SET participants = %s WHERE id = %s",
+            (json.dumps(participants), tournament_id),
+        )
+        await conn.commit()
 
-    return {"registered": registered, "skipped": skipped, "total_participants": len(t["participants"])}
-
-
-@router.post("/{tournament_id}/start")
-async def start_tournament(tournament_id: str) -> dict:
-    if tournament_id not in tournaments:
-        return {"error": "Tournament not found"}
-
-    t = tournaments[tournament_id]
-    if t["status"] != "registration":
-        return {"error": "Tournament already started"}
-
-    if len(t["participants"]) < 2:
-        return {"error": "Need at least 2 participants"}
-
-    # Shuffle and seed participants
-    random.shuffle(t["participants"])
-    for i, p in enumerate(t["participants"]):
-        p["seed"] = i + 1
-
-    # Pad to nearest power of 2
-    num_players = len(t["participants"])
-    bracket_size = 2 ** math.ceil(math.log2(num_players))
-
-    # Generate bracket matches
-    matches = []
-    match_num = 0
-    for i in range(0, bracket_size, 2):
-        match_num += 1
-        p1 = t["participants"][i]["username"] if i < num_players else None
-        p2 = t["participants"][i + 1]["username"] if i + 1 < num_players else None
-
-        match = {
-            "id": generate_id(),
-            "round": 1,
-            "match_number": match_num,
-            "player1": p1,
-            "player2": p2,
-            "winner": None,
-            "status": "pending",
-        }
-
-        # Auto-advance byes
-        if p1 and not p2:
-            match["winner"] = p1
-            match["status"] = "completed"
-        elif p2 and not p1:
-            match["winner"] = p2
-            match["status"] = "completed"
-
-        matches.append(match)
-
-    # Generate future round placeholders
-    total_rounds = math.ceil(math.log2(bracket_size))
-    matches_in_round = bracket_size // 2
-    for round_num in range(2, total_rounds + 1):
-        matches_in_round = matches_in_round // 2
-        for mn in range(1, matches_in_round + 1):
-            matches.append({
-                "id": generate_id(),
-                "round": round_num,
-                "match_number": mn,
-                "player1": None,
-                "player2": None,
-                "winner": None,
-                "status": "pending",
-            })
-
-    t["matches"] = matches
-    t["current_round"] = 1
-    t["status"] = "in_progress"
-    t["started_at"] = now_iso()
-
-    # Auto-advance byes to next round
-    _advance_byes(t)
-
-    return t
+    return {"registered": registered, "skipped": skipped, "total_participants": len(participants)}
 
 
-def _advance_byes(tournament: dict):
-    """Advance bye winners to the next round."""
-    current_round = tournament["current_round"]
-    current_matches = [m for m in tournament["matches"] if m["round"] == current_round]
-    next_matches = [m for m in tournament["matches"] if m["round"] == current_round + 1]
-
+def _advance_byes(matches: list[dict], current_round: int):
+    current_matches = [m for m in matches if m["round"] == current_round]
+    next_matches = [m for m in matches if m["round"] == current_round + 1]
     if not next_matches:
         return
-
     for i, match in enumerate(current_matches):
         if match["winner"] and match["status"] == "completed":
             next_match_idx = i // 2
@@ -195,75 +135,131 @@ def _advance_byes(tournament: dict):
                     next_match["player2"] = match["winner"]
 
 
+@router.post("/{tournament_id}/start")
+async def start_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        t = await row.fetchone()
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        if t["status"] != "registration":
+            raise HTTPException(status_code=400, detail="Tournament already started")
+        participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
+        if len(participants) < 2:
+            raise HTTPException(status_code=400, detail="Need at least 2 participants")
+        random.shuffle(participants)
+        for i, p in enumerate(participants):
+            p["seed"] = i + 1
+        num_players = len(participants)
+        bracket_size = 2 ** math.ceil(math.log2(num_players))
+        matches = []
+        match_num = 0
+        for i in range(0, bracket_size, 2):
+            match_num += 1
+            p1 = participants[i]["username"] if i < num_players else None
+            p2 = participants[i + 1]["username"] if i + 1 < num_players else None
+            match = {"id": _generate_id(), "round": 1, "match_number": match_num, "player1": p1, "player2": p2, "winner": None, "status": "pending"}
+            if p1 and not p2:
+                match["winner"] = p1
+                match["status"] = "completed"
+            elif p2 and not p1:
+                match["winner"] = p2
+                match["status"] = "completed"
+            matches.append(match)
+        total_rounds = math.ceil(math.log2(bracket_size))
+        matches_in_round = bracket_size // 2
+        for round_num in range(2, total_rounds + 1):
+            matches_in_round = matches_in_round // 2
+            for mn in range(1, matches_in_round + 1):
+                matches.append({"id": _generate_id(), "round": round_num, "match_number": mn, "player1": None, "player2": None, "winner": None, "status": "pending"})
+        _advance_byes(matches, 1)
+        now = _now_iso()
+        await conn.execute(
+            """UPDATE tournaments SET status = 'in_progress', participants = %s, matches = %s, current_round = 1, started_at = %s WHERE id = %s""",
+            (json.dumps(participants), json.dumps(matches), now, tournament_id),
+        )
+        await conn.commit()
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        updated = await row.fetchone()
+    return dict(updated)
+
+
 @router.post("/{tournament_id}/match/{match_id}/winner")
-async def set_match_winner(tournament_id: str, match_id: str, winner: str) -> dict:
-    if tournament_id not in tournaments:
-        return {"error": "Tournament not found"}
-
-    t = tournaments[tournament_id]
-    match = next((m for m in t["matches"] if m["id"] == match_id), None)
-    if not match:
-        return {"error": "Match not found"}
-
-    if winner not in [match["player1"], match["player2"]]:
-        return {"error": "Winner must be one of the match players"}
-
-    match["winner"] = winner
-    match["status"] = "completed"
-
-    # Mark loser as eliminated
-    loser = match["player1"] if winner == match["player2"] else match["player2"]
-    for p in t["participants"]:
-        if p["username"] == loser:
-            p["eliminated"] = True
-
-    # Advance winner to next round
-    current_round_matches = [m for m in t["matches"] if m["round"] == match["round"]]
-    next_round_matches = [m for m in t["matches"] if m["round"] == match["round"] + 1]
-
-    if next_round_matches:
-        match_idx = current_round_matches.index(match)
-        next_match_idx = match_idx // 2
-        if next_match_idx < len(next_round_matches):
-            next_match = next_round_matches[next_match_idx]
-            if match_idx % 2 == 0:
-                next_match["player1"] = winner
-            else:
-                next_match["player2"] = winner
-
-    # Check if round is complete
-    all_complete = all(m["status"] == "completed" for m in current_round_matches)
-    if all_complete and next_round_matches:
-        t["current_round"] = match["round"] + 1
-    elif all_complete and not next_round_matches:
-        t["status"] = "completed"
-        t["winner"] = winner
-        t["ended_at"] = now_iso()
-
-    return {"match": match, "tournament": t}
+async def set_match_winner(tournament_id: str, match_id: str, winner: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        t = await row.fetchone()
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        matches = t["matches"] if isinstance(t["matches"], list) else json.loads(t["matches"])
+        participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
+        match = next((m for m in matches if m["id"] == match_id), None)
+        if not match:
+            raise HTTPException(status_code=404, detail="Match not found")
+        if winner not in [match["player1"], match["player2"]]:
+            raise HTTPException(status_code=400, detail="Winner must be one of the match players")
+        match["winner"] = winner
+        match["status"] = "completed"
+        loser = match["player1"] if winner == match["player2"] else match["player2"]
+        for p in participants:
+            if p["username"] == loser:
+                p["eliminated"] = True
+        current_round_matches = [m for m in matches if m["round"] == match["round"]]
+        next_round_matches = [m for m in matches if m["round"] == match["round"] + 1]
+        if next_round_matches:
+            match_idx = current_round_matches.index(match)
+            next_match_idx = match_idx // 2
+            if next_match_idx < len(next_round_matches):
+                next_match = next_round_matches[next_match_idx]
+                if match_idx % 2 == 0:
+                    next_match["player1"] = winner
+                else:
+                    next_match["player2"] = winner
+        current_round = t["current_round"]
+        tournament_status = t["status"]
+        tournament_winner = t["winner"]
+        ended_at = t["ended_at"]
+        all_complete = all(m["status"] == "completed" for m in current_round_matches)
+        if all_complete and next_round_matches:
+            current_round = match["round"] + 1
+        elif all_complete and not next_round_matches:
+            tournament_status = "completed"
+            tournament_winner = winner
+            ended_at = _now_iso()
+        await conn.execute(
+            """UPDATE tournaments SET matches = %s, participants = %s, current_round = %s, status = %s, winner = %s, ended_at = %s WHERE id = %s""",
+            (json.dumps(matches), json.dumps(participants), current_round, tournament_status, tournament_winner, ended_at, tournament_id),
+        )
+        await conn.commit()
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        updated = await row.fetchone()
+    return {"match": match, "tournament": dict(updated)}
 
 
 @router.delete("/{tournament_id}")
-async def delete_tournament(tournament_id: str) -> dict:
-    if tournament_id in tournaments:
-        del tournaments[tournament_id]
+async def delete_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        await conn.execute("DELETE FROM tournaments WHERE id = %s", (tournament_id,))
+        await conn.commit()
     return {"status": "deleted"}
 
 
 @router.post("/{tournament_id}/reset")
-async def reset_tournament(tournament_id: str) -> dict:
-    if tournament_id not in tournaments:
-        return {"error": "Tournament not found"}
-
-    t = tournaments[tournament_id]
-    t["status"] = "registration"
-    t["matches"] = []
-    t["current_round"] = 0
-    t["winner"] = None
-    t["started_at"] = None
-    t["ended_at"] = None
-    for p in t["participants"]:
-        p["eliminated"] = False
-        p["seed"] = None
-
-    return t
+async def reset_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        t = await row.fetchone()
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
+        for p in participants:
+            p["eliminated"] = False
+            p["seed"] = None
+        await conn.execute(
+            """UPDATE tournaments SET status = 'registration', matches = '[]', current_round = 0, winner = NULL, started_at = NULL, ended_at = NULL, participants = %s WHERE id = %s""",
+            (json.dumps(participants), tournament_id),
+        )
+        await conn.commit()
+        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
+        updated = await row.fetchone()
+    return dict(updated)

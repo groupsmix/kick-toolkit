@@ -1,6 +1,6 @@
 """Kick OAuth 2.1 authentication routes."""
 
-from fastapi import APIRouter, Response, Request, HTTPException
+from fastapi import APIRouter, Response, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.services.kick_auth import (
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.get("/login")
 async def login():
     """Generate Kick OAuth URL and return it to the frontend."""
-    url, session_id = create_auth_url()
+    url, session_id = await create_auth_url()
     return {"auth_url": url, "session_id": session_id}
 
 
@@ -31,7 +31,6 @@ async def callback(code: str, state: str, response: Response):
 
     session_id = result["session_id"]
 
-    # Redirect to frontend with session_id
     redirect_url = f"{FRONTEND_URL}/auth/callback?session_id={session_id}"
     resp = RedirectResponse(url=redirect_url)
     return resp
@@ -40,12 +39,12 @@ async def callback(code: str, state: str, response: Response):
 @router.get("/me")
 async def me(session_id: str):
     """Get current user info from session."""
-    session = get_session(session_id)
+    session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     return {
-        "user": session.get("user", {}),
+        "user": session.get("user_data", {}),
         "scope": session.get("scope", ""),
     }
 
