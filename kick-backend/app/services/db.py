@@ -65,7 +65,13 @@ CREATE TABLE IF NOT EXISTS bot_configs (
     prefix TEXT NOT NULL DEFAULT '!',
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     welcome_message TEXT,
-    auto_mod_enabled BOOLEAN NOT NULL DEFAULT TRUE
+    auto_mod_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    welcome_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    welcome_new_message TEXT,
+    welcome_returning_message TEXT,
+    welcome_subscriber_message TEXT,
+    shoutout_template TEXT NOT NULL DEFAULT 'Check out {target} at kick.com/{target}! They were last playing {game}.',
+    auto_shoutout_raiders BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS bot_commands (
@@ -77,6 +83,15 @@ CREATE TABLE IF NOT EXISTS bot_commands (
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     mod_only BOOLEAN NOT NULL DEFAULT FALSE,
     UNIQUE(channel, name)
+);
+
+CREATE TABLE IF NOT EXISTS timed_messages (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    message TEXT NOT NULL,
+    interval_minutes INT NOT NULL DEFAULT 15,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS moderation_rules (
@@ -889,10 +904,31 @@ async def seed_demo_data():
 
         # Bot config
         await conn.execute(
-            """INSERT INTO bot_configs (channel, prefix, enabled, welcome_message, auto_mod_enabled)
-               VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING""",
-            (channel, "!", True, "Welcome to the stream, {username}! Type !commands to see what I can do.", True),
+            """INSERT INTO bot_configs (channel, prefix, enabled, welcome_message, auto_mod_enabled,
+               welcome_enabled, welcome_new_message, welcome_returning_message, welcome_subscriber_message,
+               shoutout_template, auto_shoutout_raiders)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING""",
+            (channel, "!", True, "Welcome to the stream, {username}! Type !commands to see what I can do.", True,
+             True,
+             "Welcome to the stream, {username}! Enjoy your stay 🎉",
+             "Welcome back, {username}! Great to see you again!",
+             "Thank you for subscribing, {username}! You're amazing! 💜",
+             "Check out {target} at kick.com/{target}! They were last playing {game}.",
+             False),
         )
+
+        # Timed messages
+        timed_msgs = [
+            (_generate_id(), channel, "Follow the stream to stay updated! Click the ❤️ button!", 15, True, _now_iso()),
+            (_generate_id(), channel, "Join our Discord community! Link in the panels below.", 30, True, _now_iso()),
+            (_generate_id(), channel, "Enjoying the stream? Share it with a friend!", 45, False, _now_iso()),
+        ]
+        for t in timed_msgs:
+            await conn.execute(
+                """INSERT INTO timed_messages (id, channel, message, interval_minutes, enabled, created_at)
+                   VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING""",
+                t,
+            )
 
         # Bot commands
         commands = [

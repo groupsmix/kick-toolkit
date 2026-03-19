@@ -1,4 +1,4 @@
-"""Bot configuration and commands router."""
+"""Bot configuration, commands, timed messages, welcome messages, and shoutout router."""
 
 import logging
 import os
@@ -7,8 +7,27 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
-from app.models.schemas import BotConfig, BotCommand, ModerationRule, ChatMessage, ModerationResult
+from app.models.schemas import (
+    BotConfig,
+    BotCommand,
+    ModerationRule,
+    ChatMessage,
+    ModerationResult,
+    CommandExecuteRequest,
+    CommandExecuteResult,
+    TimedMessageCreate,
+    TimedMessageUpdate,
+    WelcomeCheckRequest,
+    WelcomeCheckResult,
+    ShoutoutRequest,
+    ShoutoutResult,
+)
 from app.repositories import bot as bot_repo
+from app.services.kick_api import (
+    COMMAND_VARIABLES,
+    resolve_variables,
+    get_user_profile,
+)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODERATION_URL = "https://api.openai.com/v1/moderations"
@@ -23,7 +42,19 @@ async def get_bot_config(channel: str, _session: dict = Depends(require_auth)) -
     config = await bot_repo.get_config(channel)
     if config:
         return dict(config)
-    return {"channel": channel, "prefix": "!", "enabled": False, "welcome_message": None, "auto_mod_enabled": False}
+    return {
+        "channel": channel,
+        "prefix": "!",
+        "enabled": False,
+        "welcome_message": None,
+        "auto_mod_enabled": False,
+        "welcome_enabled": False,
+        "welcome_new_message": None,
+        "welcome_returning_message": None,
+        "welcome_subscriber_message": None,
+        "shoutout_template": "Check out {target} at kick.com/{target}! They were last playing {game}.",
+        "auto_shoutout_raiders": False,
+    }
 
 
 @router.post("/config")
@@ -31,6 +62,8 @@ async def set_bot_config(config: BotConfig, _session: dict = Depends(require_aut
     await bot_repo.upsert_config(
         config.channel, config.prefix, config.enabled,
         config.welcome_message, config.auto_mod_enabled,
+        config.welcome_enabled, config.welcome_new_message,
+        config.welcome_returning_message, config.welcome_subscriber_message,
     )
     logger.info("Bot config updated for channel=%s", config.channel)
     return config.model_dump()
@@ -68,6 +101,136 @@ async def update_command(channel: str, command_name: str, command: BotCommand, _
         raise HTTPException(status_code=404, detail="Command not found")
     logger.info("Command !%s updated in channel=%s", command_name, channel)
     return updated
+
+
+# ========== Command Variables ==========
+
+@router.get("/commands/variables/list")
+async def list_command_variables(_session: dict = Depends(require_auth)) -> list[dict]:
+    """Return the list of supported command variables."""
+    return COMMAND_VARIABLES
+
+
+@router.post("/commands/{channel}/execute")
+async def execute_command(channel: str, req: CommandExecuteRequest, _session: dict = Depends(require_auth)) -> CommandExecuteResult:
+    """Execute a command and resolve variables in its response."""
+    commands = await bot_repo.list_commands(channel)
+    cmd = next((c for c in commands if c["name"] == req.command_name), None)
+    if not cmd:
+        raise HTTPException(status_code=404, detail=f"Command !{req.command_name} not found")
+
+    resolved = await resolve_variables(cmd["response"], channel, req.username)
+    return CommandExecuteResult(
+        command_name=req.command_name,
+        original_response=cmd["response"],
+        resolved_response=resolved,
+    )
+
+
+# ========== Timed Messages ==========
+
+@router.get("/timed/{channel}")
+async def get_timed_messages(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+    return await bot_repo.list_timed_messages(channel)
+
+
+@router.post("/timed/{channel}")
+async def create_timed_message(channel: str, msg: TimedMessageCreate, _session: dict = Depends(require_auth)) -> dict:
+    msg_id = await bot_repo.create_timed_message(
+        channel, msg.message, msg.interval_minutes, msg.enabled,
+    )
+    logger.info("Timed message %s created for channel=%s", msg_id, channel)
+    return {"id": msg_id, "channel": channel, **msg.model_dump()}
+
+
+@router.put("/timed/{channel}/{msg_id}")
+async def update_timed_message(channel: str, msg_id: str, msg: TimedMessageUpdate, _session: dict = Depends(require_auth)) -> dict:
+    updated = await bot_repo.update_timed_message(
+        channel, msg_id, msg.message, msg.interval_minutes, msg.enabled,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Timed message not found")
+    logger.info("Timed message %s updated in channel=%s", msg_id, channel)
+    return updated
+
+
+@router.delete("/timed/{channel}/{msg_id}")
+async def delete_timed_message(channel: str, msg_id: str, _session: dict = Depends(require_auth)) -> dict:
+    await bot_repo.delete_timed_message(channel, msg_id)
+    logger.info("Timed message %s deleted from channel=%s", msg_id, channel)
+    return {"status": "deleted"}
+
+
+# ========== Welcome Messages ==========
+
+@router.post("/welcome/check")
+async def check_welcome(req: WelcomeCheckRequest, _session: dict = Depends(require_auth)) -> WelcomeCheckResult:
+    """Determine which welcome message to send for a given user."""
+    user_data = _session.get("user_data", {})
+    channel = user_data.get("streamer_channel") or user_data.get("name", "")
+
+    if not channel:
+        raise HTTPException(status_code=400, detail="Channel not found in session")
+
+    config = await bot_repo.get_config(channel)
+    if not config or not config.get("welcome_enabled"):
+        return WelcomeCheckResult(username=req.username, welcome_type="none", message=None)
+
+    welcome_type = await bot_repo.check_welcome_type(channel, req.username)
+
+    message = None
+    if welcome_type == "new":
+        message = config.get("welcome_new_message")
+    elif welcome_type == "subscriber":
+        message = config.get("welcome_subscriber_message")
+    elif welcome_type == "returning":
+        message = config.get("welcome_returning_message")
+
+    if message:
+        message = message.replace("{username}", req.username)
+
+    return WelcomeCheckResult(
+        username=req.username,
+        welcome_type=welcome_type,
+        message=message,
+    )
+
+
+# ========== Shoutout ==========
+
+@router.post("/shoutout/{channel}")
+async def shoutout(channel: str, req: ShoutoutRequest, _session: dict = Depends(require_auth)) -> ShoutoutResult:
+    """Generate a shoutout message for a target user by fetching their Kick profile."""
+    profile = await get_user_profile(req.target_username)
+
+    config = await bot_repo.get_config(channel)
+    template = "Check out {target} at kick.com/{target}! They were last playing {game}."
+    if config and config.get("shoutout_template"):
+        template = config["shoutout_template"]
+
+    game = profile.get("game", "Unknown") if profile else "Unknown"
+    title = profile.get("title", "") if profile else ""
+    follower_count = profile.get("follower_count", 0) if profile else 0
+    avatar_url = profile.get("avatar_url") if profile else None
+    is_live = profile.get("is_live", False) if profile else False
+
+    message = (
+        template
+        .replace("{target}", req.target_username)
+        .replace("{game}", game or "Unknown")
+        .replace("{title}", title or "")
+        .replace("{followers}", str(follower_count))
+    )
+
+    return ShoutoutResult(
+        target_username=req.target_username,
+        message=message,
+        avatar_url=avatar_url,
+        is_live=is_live,
+        game=game,
+        title=title,
+        follower_count=follower_count,
+    )
 
 
 # ========== Moderation ==========
