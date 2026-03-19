@@ -19,3 +19,34 @@ export interface DashboardStats {
   total_commands: number;
   moderation_rate: number;
 }
+
+/** Subscription plan definition. */
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  interval: string;
+  features: string[];
+  limits: Record<string, number>;
+}
+
+/** User subscription data from the API. */
+export interface SubscriptionData {
+  id: string;
+  user_id: string;
+  plan: string;
+  status: string;
+  lemon_subscription_id: string | null;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Subscription + usage response from /api/subscription/me. */
+export interface SubscriptionResponse {
+  subscription: SubscriptionData;
+  plan: SubscriptionPlan;
+  usage: Record<string, number>;
+}
