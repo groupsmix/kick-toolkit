@@ -27,6 +27,12 @@ import { AlertOverlay } from "@/pages/overlays/AlertOverlay";
 import { GiveawayOverlay } from "@/pages/overlays/GiveawayOverlay";
 import { NowPlayingOverlay } from "@/pages/overlays/NowPlayingOverlay";
 import { MarketplacePage } from "@/pages/MarketplacePage";
+import { StreamIntelPage } from "@/pages/StreamIntelPage";
+import { ViewerCRMPage } from "@/pages/ViewerCRMPage";
+import { DebriefPage } from "@/pages/DebriefPage";
+import { DiscordBotPage } from "@/pages/DiscordBotPage";
+import { RevenuePage } from "@/pages/RevenuePage";
+import { HighlightsPage } from "@/pages/HighlightsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -264,6 +270,67 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <MarketplacePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/stream-intel"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <StreamIntelPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/viewer-crm"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ViewerCRMPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/debrief"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <DebriefPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/discord"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <DiscordBotPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/revenue"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <RevenuePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/highlights"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <HighlightsPage />
             </AppLayout>
           </ProtectedRoute>
         }

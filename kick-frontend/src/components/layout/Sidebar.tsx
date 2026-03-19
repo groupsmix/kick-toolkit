@@ -22,6 +22,12 @@ import {
   Calendar,
   Monitor,
   Store,
+  Activity,
+  Heart,
+  Sparkles,
+  MessageCircle,
+  DollarSign,
+  Flame,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -32,7 +38,13 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-const navItems = [
+import type { LucideIcon } from "lucide-react";
+
+type NavItem =
+  | { type: "separator"; label: string }
+  | { path: string; label: string; icon: LucideIcon; premium?: boolean };
+
+const navItems: NavItem[] = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/bot", label: "Chat Bot & AI Mod", icon: Bot },
   { path: "/chatlogs", label: "Chat Logs", icon: MessageSquare },
@@ -51,6 +63,13 @@ const navItems = [
   { path: "/schedule", label: "Stream Schedule", icon: Calendar },
   { path: "/overlays", label: "OBS Overlays", icon: Monitor },
   { path: "/marketplace", label: "Marketplace", icon: Store },
+  { type: "separator", label: "Streamer Intelligence" },
+  { path: "/stream-intel", label: "Stream Intelligence", icon: Activity, premium: true },
+  { path: "/viewer-crm", label: "Viewer CRM", icon: Heart, premium: true },
+  { path: "/debrief", label: "AI Debrief", icon: Sparkles, premium: true },
+  { path: "/discord", label: "Discord Bot", icon: MessageCircle, premium: true },
+  { path: "/revenue", label: "Revenue", icon: DollarSign, premium: true },
+  { path: "/highlights", label: "Highlights", icon: Flame, premium: true },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
@@ -79,8 +98,18 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       <Separator className="bg-zinc-800" />
 
       {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-1">
+      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
+          if ("type" in item && item.type === "separator") {
+            return !collapsed ? (
+              <div key={item.label} className="pt-4 pb-1 px-3">
+                <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-semibold">{item.label}</p>
+              </div>
+            ) : (
+              <Separator key={item.label} className="bg-zinc-800 my-2" />
+            );
+          }
+          if (!("path" in item)) return null;
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
           return (
