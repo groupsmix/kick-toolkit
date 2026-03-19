@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  BarChart3,
   Brain,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const navItems = [
   { path: "/anticheat", label: "Anti-Cheat", icon: ShieldCheck, premium: true },
   { path: "/tournament", label: "Tournament", icon: Trophy },
   { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
+  { path: "/analytics", label: "Predictive Analytics", icon: BarChart3, premium: true },
   { path: "/coach", label: "AI Stream Coach", icon: Brain, premium: true },
 ];
 
