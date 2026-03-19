@@ -1,5 +1,8 @@
 """Kick OAuth 2.1 authentication routes."""
 
+import json
+import logging
+
 from fastapi import APIRouter, Response, HTTPException
 from fastapi.responses import RedirectResponse
 
@@ -11,6 +14,8 @@ from app.services.kick_auth import (
     revoke_session,
     FRONTEND_URL,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -27,9 +32,11 @@ async def callback(code: str, state: str, response: Response):
     """Handle OAuth callback from Kick — exchange code for tokens."""
     result = await exchange_code(code, state)
     if not result:
+        logger.error("OAuth exchange failed for state=%s", state)
         raise HTTPException(status_code=400, detail="OAuth callback failed")
 
     session_id = result["session_id"]
+    logger.info("OAuth exchange succeeded, session=%s", session_id[:8])
 
     redirect_url = f"{FRONTEND_URL}/auth/callback?session_id={session_id}"
     resp = RedirectResponse(url=redirect_url)
@@ -43,8 +50,16 @@ async def me(session_id: str):
     if not session:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    user_data = session.get("user_data", {})
+    # Guard against double-serialised JSON (stored as string instead of dict)
+    if isinstance(user_data, str):
+        try:
+            user_data = json.loads(user_data)
+        except (json.JSONDecodeError, TypeError):
+            user_data = {}
+
     return {
-        "user": session.get("user_data", {}),
+        "user": user_data,
         "scope": session.get("scope", ""),
     }
 
