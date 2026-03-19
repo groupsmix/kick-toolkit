@@ -5,7 +5,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/hooks/useApi";
 import {
@@ -119,7 +118,7 @@ export function GiveawayPage() {
   };
 
   const reroll = async (gwId: string) => {
-    const result = await api<{ winner: string }>(`/api/giveaway/${gwId}/reroll`, {
+    await api<{ winner: string }>(`/api/giveaway/${gwId}/reroll`, {
       method: "POST",
     });
     const updated = await api<Giveaway>(`/api/giveaway/${gwId}`);
