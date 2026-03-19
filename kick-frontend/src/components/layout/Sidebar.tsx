@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Gift,
   ShieldAlert,
+  ShieldCheck,
   Trophy,
   Lightbulb,
   ChevronLeft,
@@ -27,6 +28,7 @@ const navItems = [
   { path: "/chatlogs", label: "Chat Logs", icon: MessageSquare },
   { path: "/giveaway", label: "Giveaway Roller", icon: Gift },
   { path: "/antialt", label: "Anti-Alt Detection", icon: ShieldAlert, premium: true },
+  { path: "/anticheat", label: "Anti-Cheat", icon: ShieldCheck, premium: true },
   { path: "/tournament", label: "Tournament", icon: Trophy },
   { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
 ];

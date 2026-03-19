@@ -41,6 +41,39 @@ interface AntiAltSettings {
   check_name_similarity: boolean;
   check_follow_status: boolean;
   whitelisted_users: string[];
+  challenge_enabled: boolean;
+  challenge_type: string;
+  challenge_wait_minutes: number;
+  challenge_message: string;
+  auto_whitelist_enabled: boolean;
+  auto_whitelist_min_messages: number;
+  auto_whitelist_min_follow_days: number;
+}
+
+interface BannedUser {
+  username: string;
+  channel: string;
+  banned_at: string | null;
+  ban_reason: string | null;
+  ban_source: string;
+}
+
+interface WhitelistedUserEntry {
+  username: string;
+  channel: string;
+  added_by: string | null;
+  reason: string | null;
+  tier: string;
+  auto_whitelisted: boolean;
+  created_at: string | null;
+}
+
+interface RiskModelStats {
+  channel: string;
+  feature_weights: Record<string, number>;
+  training_samples: number;
+  last_trained_at: string | null;
+  model_version: number;
 }
 
 export function AntiAltPage() {
@@ -51,6 +84,12 @@ export function AntiAltPage() {
   const [checkUsername, setCheckUsername] = useState("");
   const [checkResult, setCheckResult] = useState<FlaggedAccount | null>(null);
   const [checking, setChecking] = useState(false);
+  const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
+  const [whitelistedUsers, setWhitelistedUsers] = useState<WhitelistedUserEntry[]>([]);
+  const [riskModel, setRiskModel] = useState<RiskModelStats | null>(null);
+  const [retraining, setRetraining] = useState(false);
+  const [newBanUsername, setNewBanUsername] = useState("");
+  const [activeTab, setActiveTab] = useState<"flagged" | "banned" | "whitelist" | "model">("flagged");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +99,9 @@ export function AntiAltPage() {
     Promise.all([
       api<FlaggedAccount[]>("/api/antialt/flagged").then(setFlagged),
       api<AntiAltSettings>("/api/antialt/settings").then(setSettings),
+      api<BannedUser[]>(`/api/antialt/banned-users?channel=${channel}`).then(setBannedUsers),
+      api<WhitelistedUserEntry[]>(`/api/antialt/whitelist?channel=${channel}`).then(setWhitelistedUsers),
+      api<RiskModelStats>(`/api/antialt/risk-model/stats?channel=${channel}`).then(setRiskModel),
     ])
       .catch((err) => {
         setError(err.message || "Failed to load anti-alt data");
@@ -93,11 +135,61 @@ export function AntiAltPage() {
 
   const whitelistUser = async (username: string) => {
     try {
-      await api(`/api/antialt/whitelist/${username}`, { method: "POST" });
+      await api(`/api/antialt/whitelist/${username}?channel=${channel}`, { method: "POST" });
       setFlagged(flagged.filter((a) => a.username !== username));
+      api<WhitelistedUserEntry[]>(`/api/antialt/whitelist?channel=${channel}`).then(setWhitelistedUsers);
       toast.success(`${username} whitelisted`);
     } catch {
       toast.error("Failed to whitelist user");
+    }
+  };
+
+  const addBannedUser = async () => {
+    if (!newBanUsername) return;
+    try {
+      await api("/api/antialt/banned-users", {
+        method: "POST",
+        body: JSON.stringify({ username: newBanUsername, channel, ban_reason: "Manual ban", ban_source: "manual" }),
+      });
+      api<BannedUser[]>(`/api/antialt/banned-users?channel=${channel}`).then(setBannedUsers);
+      setNewBanUsername("");
+      toast.success(`${newBanUsername} added to ban list`);
+    } catch {
+      toast.error("Failed to add banned user");
+    }
+  };
+
+  const removeBannedUser = async (username: string) => {
+    try {
+      await api(`/api/antialt/banned-users/${username}?channel=${channel}`, { method: "DELETE" });
+      setBannedUsers(bannedUsers.filter((u) => u.username !== username));
+      toast.success(`${username} removed from ban list`);
+    } catch {
+      toast.error("Failed to remove banned user");
+    }
+  };
+
+  const removeWhitelisted = async (username: string) => {
+    try {
+      await api(`/api/antialt/whitelist/${username}?channel=${channel}`, { method: "DELETE" });
+      setWhitelistedUsers(whitelistedUsers.filter((u) => u.username !== username));
+      toast.success(`${username} removed from whitelist`);
+    } catch {
+      toast.error("Failed to remove from whitelist");
+    }
+  };
+
+  const retrainModel = async () => {
+    setRetraining(true);
+    try {
+      await api(`/api/antialt/risk-model/retrain?channel=${channel}`, { method: "POST" });
+      const stats = await api<RiskModelStats>(`/api/antialt/risk-model/stats?channel=${channel}`);
+      setRiskModel(stats);
+      toast.success("Risk model retrained successfully");
+    } catch {
+      toast.error("Failed to retrain model");
+    } finally {
+      setRetraining(false);
     }
   };
 
@@ -254,79 +346,232 @@ export function AntiAltPage() {
         </CardContent>
       </Card>
 
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-zinc-800 pb-2">
+        {(["flagged", "banned", "whitelist", "model"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              activeTab === tab
+                ? "bg-zinc-800 text-emerald-400 border-b-2 border-emerald-400"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {tab === "flagged" && `Flagged (${flagged.length})`}
+            {tab === "banned" && `Banned (${bannedUsers.length})`}
+            {tab === "whitelist" && `Whitelist (${whitelistedUsers.length})`}
+            {tab === "model" && "ML Model"}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Flagged Accounts */}
+        {/* Main Content Area */}
         <div className="lg:col-span-2 space-y-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-red-400" />
-            Flagged Accounts ({flagged.length})
-          </h3>
+          {/* Flagged Accounts Tab */}
+          {activeTab === "flagged" && (
+            <>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-red-400" />
+                Flagged Accounts ({flagged.length})
+              </h3>
 
-          {flagged.map((account) => {
-            const colors = riskColor(account.risk_level);
-            return (
-              <Card key={account.username} className={`bg-zinc-900/50 border-zinc-800 border-l-2 ${colors.border}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{account.username}</span>
-                        <Badge className={`text-[10px] ${colors.bg} ${colors.text}`}>
-                          {account.risk_level}
-                        </Badge>
-                        <span className={`text-sm font-bold ${colors.text}`}>
-                          {account.risk_score.toFixed(0)}%
-                        </span>
+              {flagged.length === 0 && (
+                <p className="text-zinc-500 text-sm">No flagged accounts yet.</p>
+              )}
+
+              {flagged.map((account) => {
+                const colors = riskColor(account.risk_level);
+                return (
+                  <Card key={account.username} className={`bg-zinc-900/50 border-zinc-800 border-l-2 ${colors.border}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white font-medium">{account.username}</span>
+                            <Badge className={`text-[10px] ${colors.bg} ${colors.text}`}>
+                              {account.risk_level}
+                            </Badge>
+                            <span className={`text-sm font-bold ${colors.text}`}>
+                              {account.risk_score.toFixed(0)}%
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {account.account_age_days}d old
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Users className="w-3 h-3" />
+                              {account.follower_count} followers
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {account.flags.map((flag) => (
+                              <Badge key={flag} variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                                {flag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-1 ml-4">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => whitelistUser(account.username)}
+                            className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                          >
+                            <UserCheck className="w-4 h-4 mr-1" />
+                            Whitelist
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeUser(account.username)}
+                            className="text-zinc-400 hover:text-red-400"
+                          >
+                            <UserX className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </>
+          )}
 
-                      <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {account.account_age_days}d old
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3" />
-                          {account.follower_count} followers
-                        </span>
-                      </div>
+          {/* Banned Users Tab */}
+          {activeTab === "banned" && (
+            <>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <UserX className="w-5 h-5 text-red-400" />
+                Banned Users ({bannedUsers.length})
+              </h3>
+              <div className="flex gap-2">
+                <Input
+                  value={newBanUsername}
+                  onChange={(e) => setNewBanUsername(e.target.value)}
+                  placeholder="Username to ban..."
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                  onKeyDown={(e) => e.key === "Enter" && addBannedUser()}
+                />
+                <Button onClick={addBannedUser} className="bg-red-500 hover:bg-red-600 text-white">
+                  Ban User
+                </Button>
+              </div>
+              {bannedUsers.map((u) => (
+                <Card key={u.username} className="bg-zinc-900/50 border-zinc-800">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-white font-medium">{u.username}</span>
+                      <span className="text-xs text-zinc-500 ml-2">{u.ban_source}</span>
+                      {u.ban_reason && <span className="text-xs text-zinc-500 ml-2">— {u.ban_reason}</span>}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeBannedUser(u.username)} className="text-zinc-400 hover:text-red-400">
+                      <UserX className="w-4 h-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
 
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {account.flags.map((flag) => (
-                          <Badge key={flag} variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
-                            {flag}
-                          </Badge>
+          {/* Whitelist Tab */}
+          {activeTab === "whitelist" && (
+            <>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-emerald-400" />
+                Whitelisted Users ({whitelistedUsers.length})
+              </h3>
+              {whitelistedUsers.length === 0 && (
+                <p className="text-zinc-500 text-sm">No whitelisted users yet.</p>
+              )}
+              {whitelistedUsers.map((u) => (
+                <Card key={u.username} className="bg-zinc-900/50 border-zinc-800">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-white font-medium">{u.username}</span>
+                      <Badge className="ml-2 text-[10px] bg-emerald-500/10 text-emerald-400">{u.tier}</Badge>
+                      {u.auto_whitelisted && <Badge className="ml-1 text-[10px] bg-blue-500/10 text-blue-400">Auto</Badge>}
+                      {u.reason && <span className="text-xs text-zinc-500 ml-2">— {u.reason}</span>}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => removeWhitelisted(u.username)} className="text-zinc-400 hover:text-red-400">
+                      <UserX className="w-4 h-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+
+          {/* ML Model Tab */}
+          {activeTab === "model" && riskModel && (
+            <>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-purple-400" />
+                ML Risk Scoring Model
+              </h3>
+              <Card className="bg-zinc-900/50 border-zinc-800">
+                <CardContent className="p-4 space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 rounded bg-zinc-800/50">
+                      <p className="text-xs text-zinc-500">Training Samples</p>
+                      <p className="text-xl text-white font-bold">{riskModel.training_samples}</p>
+                    </div>
+                    <div className="text-center p-3 rounded bg-zinc-800/50">
+                      <p className="text-xs text-zinc-500">Model Version</p>
+                      <p className="text-xl text-white font-bold">v{riskModel.model_version}</p>
+                    </div>
+                    <div className="text-center p-3 rounded bg-zinc-800/50">
+                      <p className="text-xs text-zinc-500">Last Trained</p>
+                      <p className="text-sm text-white font-medium">{riskModel.last_trained_at || "Never"}</p>
+                    </div>
+                  </div>
+
+                  {Object.keys(riskModel.feature_weights).length > 0 && (
+                    <div>
+                      <p className="text-xs text-zinc-500 mb-2">Feature Weights:</p>
+                      <div className="space-y-2">
+                        {Object.entries(riskModel.feature_weights).map(([feature, weight]) => (
+                          <div key={feature} className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-400 w-40">{feature}</span>
+                            <div className="flex-1 bg-zinc-800 rounded-full h-2">
+                              <div
+                                className="h-2 rounded-full bg-purple-500"
+                                style={{ width: `${Math.min(Math.abs(weight) * 100, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-zinc-400 w-12 text-right">{weight.toFixed(2)}</span>
+                          </div>
                         ))}
                       </div>
                     </div>
+                  )}
 
-                    <div className="flex gap-1 ml-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => whitelistUser(account.username)}
-                        className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                      >
-                        <UserCheck className="w-4 h-4 mr-1" />
-                        Whitelist
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeUser(account.username)}
-                        className="text-zinc-400 hover:text-red-400"
-                      >
-                        <UserX className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
+                  <Button
+                    onClick={retrainModel}
+                    disabled={retraining}
+                    className="w-full bg-purple-500 hover:bg-purple-600 text-white"
+                  >
+                    {retraining ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      "Retrain Model"
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
-            );
-          })}
+            </>
+          )}
         </div>
 
-        {/* Settings */}
-        <div>
+        {/* Settings Sidebar */}
+        <div className="space-y-4">
           <Card className="bg-zinc-900/50 border-zinc-800">
             <CardHeader>
               <CardTitle className="text-sm text-zinc-400 flex items-center gap-2">
@@ -388,22 +633,52 @@ export function AntiAltPage() {
                     />
                   </div>
 
-                  {settings.whitelisted_users.length > 0 && (
-                    <>
-                      <Separator className="bg-zinc-800" />
-                      <div>
-                        <Label className="text-zinc-400 text-xs">Whitelisted Users</Label>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {settings.whitelisted_users.map((u) => (
-                            <Badge key={u} variant="outline" className="border-emerald-500/30 text-emerald-400">
-                              <UserCheck className="w-3 h-3 mr-1" />
-                              {u}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
+                  <Separator className="bg-zinc-800" />
+                  <p className="text-xs text-zinc-500 font-semibold uppercase">Challenge Gate</p>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-zinc-300 text-sm">Challenge Enabled</Label>
+                    <Switch
+                      checked={settings.challenge_enabled}
+                      onCheckedChange={(v) => updateSettings({ challenge_enabled: v })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-zinc-400 text-xs">Challenge Wait (min)</Label>
+                    <Input
+                      type="number"
+                      value={settings.challenge_wait_minutes}
+                      onChange={(e) => updateSettings({ challenge_wait_minutes: parseInt(e.target.value) })}
+                      className="bg-zinc-800 border-zinc-700 text-white mt-1"
+                    />
+                  </div>
+
+                  <Separator className="bg-zinc-800" />
+                  <p className="text-xs text-zinc-500 font-semibold uppercase">Auto-Whitelist</p>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-zinc-300 text-sm">Auto-Whitelist</Label>
+                    <Switch
+                      checked={settings.auto_whitelist_enabled}
+                      onCheckedChange={(v) => updateSettings({ auto_whitelist_enabled: v })}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-zinc-400 text-xs">Min Messages</Label>
+                    <Input
+                      type="number"
+                      value={settings.auto_whitelist_min_messages}
+                      onChange={(e) => updateSettings({ auto_whitelist_min_messages: parseInt(e.target.value) })}
+                      className="bg-zinc-800 border-zinc-700 text-white mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-zinc-400 text-xs">Min Follow Days</Label>
+                    <Input
+                      type="number"
+                      value={settings.auto_whitelist_min_follow_days}
+                      onChange={(e) => updateSettings({ auto_whitelist_min_follow_days: parseInt(e.target.value) })}
+                      className="bg-zinc-800 border-zinc-700 text-white mt-1"
+                    />
+                  </div>
                 </>
               )}
             </CardContent>

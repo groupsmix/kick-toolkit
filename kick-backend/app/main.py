@@ -12,6 +12,7 @@ from app.routers.bot import router as bot_router, mod_router
 from app.routers.chatlogs import router as chatlogs_router
 from app.routers.giveaway import router as giveaway_router
 from app.routers.antialt import router as antialt_router
+from app.routers.anticheat import router as anticheat_router
 from app.routers.tournament import router as tournament_router
 from app.routers.ideas import router as ideas_router
 from app.routers.subscription import router as subscription_router, webhook_router
@@ -86,6 +87,7 @@ app.include_router(mod_router)
 app.include_router(chatlogs_router)
 app.include_router(giveaway_router)
 app.include_router(antialt_router)
+app.include_router(anticheat_router)
 app.include_router(tournament_router)
 app.include_router(ideas_router)
 app.include_router(subscription_router)
