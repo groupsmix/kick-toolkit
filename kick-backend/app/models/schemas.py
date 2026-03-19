@@ -42,6 +42,8 @@ class ModerationResult(BaseModel):
     reason: Optional[str] = None
     action: Optional[str] = None
     confidence: float = 0.0
+    categories: dict[str, bool] = {}
+    category_scores: dict[str, float] = {}
 
 
 # ========== Chat Logs ==========

@@ -8,7 +8,7 @@ import random
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
-from app.models.schemas import TournamentCreate, TournamentParticipant
+from app.models.schemas import Tournament, TournamentCreate, TournamentMatch, TournamentParticipant
 from app.repositories import tournament as tournament_repo
 from app.services.db import get_conn, _generate_id, _now_iso
 
@@ -18,8 +18,9 @@ router = APIRouter(prefix="/api/tournament", tags=["tournament"])
 
 
 @router.get("")
-async def list_tournaments(channel: str = "", _session: dict = Depends(require_auth)) -> list[dict]:
-    return await tournament_repo.list_tournaments(channel)
+async def list_tournaments(channel: str = "", _session: dict = Depends(require_auth)) -> list[Tournament]:
+    rows = await tournament_repo.list_tournaments(channel)
+    return [Tournament(**row) for row in rows]
 
 
 @router.post("/create")
@@ -34,11 +35,11 @@ async def create_tournament(data: TournamentCreate, _session: dict = Depends(req
 
 
 @router.get("/{tournament_id}")
-async def get_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> Tournament:
     t = await tournament_repo.get_by_id(tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    return t
+    return Tournament(**t)
 
 
 @router.post("/{tournament_id}/register")
@@ -167,7 +168,7 @@ async def start_tournament(tournament_id: str, _session: dict = Depends(require_
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         updated = await row.fetchone()
     logger.info("Tournament %s started", tournament_id)
-    return dict(updated)
+    return Tournament(**dict(updated))
 
 
 @router.post("/{tournament_id}/match/{match_id}/winner")
@@ -219,7 +220,7 @@ async def set_match_winner(tournament_id: str, match_id: str, winner: str, _sess
         await conn.commit()
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         updated = await row.fetchone()
-    return {"match": match, "tournament": dict(updated)}
+    return {"match": TournamentMatch(**match), "tournament": Tournament(**dict(updated))}
 
 
 @router.delete("/{tournament_id}")
@@ -247,4 +248,4 @@ async def reset_tournament(tournament_id: str, _session: dict = Depends(require_
         await conn.commit()
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         updated = await row.fetchone()
-    return dict(updated)
+    return Tournament(**dict(updated))

@@ -1,13 +1,17 @@
 """Bot configuration and commands router."""
 
 import logging
-import random
+import os
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
 from app.models.schemas import BotConfig, BotCommand, ModerationRule, ChatMessage, ModerationResult
 from app.repositories import bot as bot_repo
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODERATION_URL = "https://api.openai.com/v1/moderations"
 
 logger = logging.getLogger(__name__)
 
@@ -106,45 +110,63 @@ async def delete_moderation_rule(channel: str, rule_id: str, _session: dict = De
     return {"status": "deleted"}
 
 
+_CATEGORY_ACTION_MAP: dict[str, str] = {
+    "hate": "delete",
+    "hate/threatening": "ban",
+    "harassment": "delete",
+    "harassment/threatening": "ban",
+    "self-harm": "delete",
+    "self-harm/intent": "delete",
+    "self-harm/instructions": "delete",
+    "sexual": "delete",
+    "sexual/minors": "ban",
+    "violence": "delete",
+    "violence/graphic": "delete",
+}
+
+
 @mod_router.post("/analyze")
 async def analyze_message(msg: ChatMessage) -> ModerationResult:
-    """Simulate AI moderation analysis of a chat message."""
-    text = msg.message.lower()
-    flagged = False
+    """Analyze a chat message using the OpenAI Moderation API."""
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI API key not configured. Set the OPENAI_API_KEY environment variable.",
+        )
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            OPENAI_MODERATION_URL,
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            json={"input": msg.message},
+        )
+
+    if response.status_code != 200:
+        logger.error("OpenAI Moderation API error: %s %s", response.status_code, response.text)
+        raise HTTPException(status_code=502, detail="Moderation API request failed")
+
+    data = response.json()
+    result = data["results"][0]
+    flagged: bool = result["flagged"]
+    categories: dict[str, bool] = result["categories"]
+    category_scores: dict[str, float] = result["category_scores"]
+
     reason = None
     action = None
     confidence = 0.0
 
-    toxic_patterns = ["trash", "garbage", "stupid", "idiot", "kill", "die", "hate", "suck", "worst"]
-    spam_patterns = ["bit.ly", "free viewers", "follow me", "buy followers", "check out my"]
+    if flagged:
+        flagged_cats = [cat for cat, val in categories.items() if val]
+        top_cat = max(flagged_cats, key=lambda c: category_scores.get(c, 0.0))
+        confidence = category_scores.get(top_cat, 0.0)
+        reason = f"AI: {', '.join(flagged_cats)} (confidence {confidence:.2f})"
+        action = _CATEGORY_ACTION_MAP.get(top_cat, "delete")
 
-    toxic_count = sum(1 for p in toxic_patterns if p in text)
-    if toxic_count > 0:
-        confidence = min(0.5 + toxic_count * 0.15, 0.98)
-        if confidence > 0.6:
-            flagged = True
-            reason = f"AI: Toxicity detected ({confidence:.2f})"
-            action = "delete"
-
-    spam_count = sum(1 for p in spam_patterns if p in text)
-    if spam_count > 0:
-        confidence = min(0.7 + spam_count * 0.1, 0.99)
-        flagged = True
-        reason = "Link spam detected"
-        action = "delete"
-
-    if len(msg.message) > 10:
-        caps_ratio = sum(1 for c in msg.message if c.isupper()) / len(msg.message)
-        if caps_ratio > 0.7:
-            flagged = True
-            confidence = caps_ratio
-            reason = f"Excessive caps ({int(caps_ratio * 100)}%)"
-            action = "warn"
-
-    if any(c * 8 in text for c in "abcdefghijklmnopqrstuvwxyz!?"):
-        flagged = True
-        confidence = 0.85
-        reason = "Spam: Repeated characters"
-        action = "delete"
-
-    return ModerationResult(flagged=flagged, reason=reason, action=action, confidence=confidence)
+    return ModerationResult(
+        flagged=flagged,
+        reason=reason,
+        action=action,
+        confidence=confidence,
+        categories=categories,
+        category_scores=category_scores,
+    )

@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
-from app.models.schemas import GiveawayCreate, GiveawayEntry
+from app.models.schemas import Giveaway, GiveawayCreate, GiveawayEntry
 from app.repositories import giveaway as giveaway_repo
 
 logger = logging.getLogger(__name__)
@@ -14,8 +14,9 @@ router = APIRouter(prefix="/api/giveaway", tags=["giveaway"])
 
 
 @router.get("")
-async def list_giveaways(channel: str = "", _session: dict = Depends(require_auth)) -> list[dict]:
-    return await giveaway_repo.list_giveaways(channel)
+async def list_giveaways(channel: str = "", _session: dict = Depends(require_auth)) -> list[Giveaway]:
+    rows = await giveaway_repo.list_giveaways(channel)
+    return [Giveaway(**row) for row in rows]
 
 
 @router.post("/create")
@@ -31,11 +32,11 @@ async def create_giveaway(data: GiveawayCreate, _session: dict = Depends(require
 
 
 @router.get("/{giveaway_id}")
-async def get_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> Giveaway:
     gw = await giveaway_repo.get_by_id(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
-    return gw
+    return Giveaway(**gw)
 
 
 @router.post("/{giveaway_id}/enter")
@@ -85,11 +86,11 @@ async def reroll_giveaway(giveaway_id: str, _session: dict = Depends(require_aut
 
 
 @router.post("/{giveaway_id}/close")
-async def close_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def close_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> Giveaway:
     gw = await giveaway_repo.close(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
-    return gw
+    return Giveaway(**gw)
 
 
 @router.delete("/{giveaway_id}")

@@ -38,7 +38,7 @@ IDEA_TEMPLATES = [
 
 
 @router.post("/generate")
-async def generate_ideas(req: IdeaGenerateRequest) -> list[dict]:
+async def generate_ideas(req: IdeaGenerateRequest) -> list[GiveawayIdea]:
     pool = IDEA_TEMPLATES.copy()
 
     if req.category:
@@ -56,12 +56,13 @@ async def generate_ideas(req: IdeaGenerateRequest) -> list[dict]:
 
     selected = random.sample(pool, min(5, len(pool)))
 
-    return [{"id": _generate_id(), **idea, "saved": False} for idea in selected]
+    return [GiveawayIdea(id=_generate_id(), **idea, saved=False) for idea in selected]
 
 
 @router.get("/saved")
-async def get_saved_ideas(_session: dict = Depends(require_auth)) -> list[dict]:
-    return await ideas_repo.list_saved()
+async def get_saved_ideas(_session: dict = Depends(require_auth)) -> list[GiveawayIdea]:
+    rows = await ideas_repo.list_saved()
+    return [GiveawayIdea(**row) for row in rows]
 
 
 @router.post("/save")
