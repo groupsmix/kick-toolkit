@@ -27,6 +27,12 @@ from app.routers.schedule import router as schedule_router
 from app.routers.profiles import router as profiles_router
 from app.routers.overlays import router as overlays_router
 from app.routers.marketplace import router as marketplace_router
+from app.routers.stream_intel import router as stream_intel_router
+from app.routers.viewer_crm import router as viewer_crm_router
+from app.routers.debrief import router as debrief_router
+from app.routers.discord_bot import router as discord_bot_router
+from app.routers.revenue import router as revenue_router
+from app.routers.highlights import router as highlights_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -114,6 +120,12 @@ app.include_router(schedule_router)
 app.include_router(profiles_router)
 app.include_router(overlays_router)
 app.include_router(marketplace_router)
+app.include_router(stream_intel_router)
+app.include_router(viewer_crm_router)
+app.include_router(debrief_router)
+app.include_router(discord_bot_router)
+app.include_router(revenue_router)
+app.include_router(highlights_router)
 
 
 @app.get("/healthz")

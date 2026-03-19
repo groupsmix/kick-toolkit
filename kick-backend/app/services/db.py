@@ -740,6 +740,127 @@ CREATE TABLE IF NOT EXISTS overlay_settings (
     updated_at TEXT NOT NULL,
     UNIQUE(channel, overlay_type)
 );
+
+-- ========== Stream Intelligence Dashboard ==========
+CREATE TABLE IF NOT EXISTS stream_intel_sessions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_minutes INT NOT NULL DEFAULT 0,
+    peak_viewers INT NOT NULL DEFAULT 0,
+    avg_viewers FLOAT NOT NULL DEFAULT 0.0,
+    chat_messages INT NOT NULL DEFAULT 0,
+    new_followers INT NOT NULL DEFAULT 0,
+    new_subscribers INT NOT NULL DEFAULT 0,
+    stream_score FLOAT NOT NULL DEFAULT 0.0,
+    game TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS stream_scores (
+    channel TEXT PRIMARY KEY,
+    overall_score FLOAT NOT NULL DEFAULT 0.0,
+    viewer_score FLOAT NOT NULL DEFAULT 0.0,
+    chat_score FLOAT NOT NULL DEFAULT 0.0,
+    growth_score FLOAT NOT NULL DEFAULT 0.0,
+    consistency_score FLOAT NOT NULL DEFAULT 0.0,
+    trend TEXT NOT NULL DEFAULT 'stable',
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS best_time_slots (
+    id SERIAL PRIMARY KEY,
+    channel TEXT NOT NULL,
+    day_of_week INT NOT NULL,
+    hour INT NOT NULL,
+    competition_score FLOAT NOT NULL DEFAULT 0.0,
+    recommended_score FLOAT NOT NULL DEFAULT 0.0,
+    avg_category_viewers INT NOT NULL DEFAULT 0,
+    active_streamers INT NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    UNIQUE(channel, day_of_week, hour)
+);
+
+-- ========== Viewer CRM ==========
+CREATE TABLE IF NOT EXISTS viewer_profiles (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    total_messages INT NOT NULL DEFAULT 0,
+    streams_watched INT NOT NULL DEFAULT 0,
+    is_subscriber BOOLEAN NOT NULL DEFAULT FALSE,
+    is_follower BOOLEAN NOT NULL DEFAULT FALSE,
+    segment TEXT NOT NULL DEFAULT 'new',
+    watch_time_minutes INT NOT NULL DEFAULT 0,
+    favorite_games JSONB NOT NULL DEFAULT '[]',
+    notes TEXT NOT NULL DEFAULT '',
+    UNIQUE(channel, username)
+);
+
+-- ========== AI Post-Stream Debrief ==========
+CREATE TABLE IF NOT EXISTS debrief_results (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    session_id TEXT,
+    summary TEXT NOT NULL DEFAULT '',
+    top_moments JSONB NOT NULL DEFAULT '[]',
+    sentiment_timeline JSONB NOT NULL DEFAULT '[]',
+    chat_highlights JSONB NOT NULL DEFAULT '[]',
+    recommendations JSONB NOT NULL DEFAULT '[]',
+    title_suggestions JSONB NOT NULL DEFAULT '[]',
+    trending_topics JSONB NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+
+-- ========== Discord Bot Integration ==========
+CREATE TABLE IF NOT EXISTS discord_bot_configs (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL UNIQUE,
+    guild_id TEXT NOT NULL DEFAULT '',
+    webhook_url TEXT NOT NULL DEFAULT '',
+    go_live_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    go_live_channel_id TEXT NOT NULL DEFAULT '',
+    go_live_message TEXT NOT NULL DEFAULT '{streamer} is now live on Kick! Playing {game} - {title}',
+    chat_bridge_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    chat_bridge_channel_id TEXT NOT NULL DEFAULT '',
+    sub_sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    sub_sync_role_id TEXT NOT NULL DEFAULT '',
+    stats_commands_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    schedule_display_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    schedule_channel_id TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL
+);
+
+-- ========== Revenue Intelligence ==========
+CREATE TABLE IF NOT EXISTS revenue_entries (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    source TEXT NOT NULL,
+    amount FLOAT NOT NULL DEFAULT 0.0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    description TEXT NOT NULL DEFAULT '',
+    stream_session_id TEXT,
+    date TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Auto-Highlight Detection ==========
+CREATE TABLE IF NOT EXISTS highlight_markers (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    session_id TEXT,
+    timestamp_offset_seconds INT NOT NULL DEFAULT 0,
+    intensity FLOAT NOT NULL DEFAULT 0.0,
+    message_rate FLOAT NOT NULL DEFAULT 0.0,
+    duration_seconds INT NOT NULL DEFAULT 30,
+    description TEXT NOT NULL DEFAULT '',
+    sample_messages JSONB NOT NULL DEFAULT '[]',
+    category TEXT NOT NULL DEFAULT 'hype',
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -966,6 +1087,210 @@ async def seed_demo_data():
                    VALUES (%s,%s,%s,%s,%s,%s,%s,'published',%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                 (_generate_id(), s_id, title, desc, cat, price, tags,
                  downloads, rating, r_count, now, now),
+            )
+
+        # ========== Stream Intelligence Sessions ==========
+        intel_sessions = [
+            (_generate_id(), channel, (base_time - timedelta(days=6)).isoformat(),
+             (base_time - timedelta(days=6) + timedelta(hours=3, minutes=15)).isoformat(),
+             195, 342, 287.5, 1845, 28, 5, 78.5, "Fortnite", "Solo ranked grind to Unreal"),
+            (_generate_id(), channel, (base_time - timedelta(days=4)).isoformat(),
+             (base_time - timedelta(days=4) + timedelta(hours=4)).isoformat(),
+             240, 510, 415.0, 3200, 45, 12, 88.2, "Valorant", "Road to Immortal - Viewer games"),
+            (_generate_id(), channel, (base_time - timedelta(days=2)).isoformat(),
+             (base_time - timedelta(days=2) + timedelta(hours=2, minutes=30)).isoformat(),
+             150, 220, 185.0, 980, 12, 2, 62.0, "Just Chatting", "AMA + Chill vibes"),
+            (_generate_id(), channel, (base_time - timedelta(days=1)).isoformat(),
+             (base_time - timedelta(days=1) + timedelta(hours=5)).isoformat(),
+             300, 680, 520.0, 4500, 65, 18, 92.1, "Valorant", "Tournament practice w/ squad"),
+            (_generate_id(), channel, base_time.isoformat(), None,
+             0, 450, 380.0, 2100, 30, 8, 0.0, "Fortnite", "New season first look!"),
+        ]
+        for sid, ch, started, ended, dur, peak, avg_v, msgs, foll, subs, score, game, title in intel_sessions:
+            await conn.execute(
+                """INSERT INTO stream_intel_sessions
+                   (id, channel, started_at, ended_at, duration_minutes, peak_viewers, avg_viewers,
+                    chat_messages, new_followers, new_subscribers, stream_score, game, title)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (sid, ch, started, ended, dur, peak, avg_v, msgs, foll, subs, score, game, title),
+            )
+
+        # Stream score
+        await conn.execute(
+            """INSERT INTO stream_scores
+               (channel, overall_score, viewer_score, chat_score, growth_score, consistency_score, trend, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (channel, 80.2, 75.0, 88.5, 82.0, 76.0, "rising", now),
+        )
+
+        # Best time slots
+        best_times = [
+            (channel, 1, 20, 25.0, 92.0, 1200, 45),  # Tuesday 8pm
+            (channel, 3, 19, 30.0, 88.0, 1500, 52),  # Thursday 7pm
+            (channel, 5, 21, 15.0, 95.0, 800, 28),   # Saturday 9pm
+            (channel, 0, 20, 35.0, 78.0, 1800, 65),  # Monday 8pm
+            (channel, 4, 18, 40.0, 72.0, 2000, 78),  # Friday 6pm
+        ]
+        for ch, dow, hr, comp, rec, avg_cat, active in best_times:
+            await conn.execute(
+                """INSERT INTO best_time_slots
+                   (channel, day_of_week, hour, competition_score, recommended_score,
+                    avg_category_viewers, active_streamers, updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (ch, dow, hr, comp, rec, avg_cat, active, now),
+            )
+
+        # ========== Viewer CRM ==========
+        viewer_profiles = [
+            (_generate_id(), channel, "viewer_andy", (base_time - timedelta(days=90)).isoformat(),
+             base_time.isoformat(), 487, 45, True, True, "super_fan", 2700,
+             json.dumps(["Valorant", "Fortnite"]), ""),
+            (_generate_id(), channel, "sub_mike", (base_time - timedelta(days=180)).isoformat(),
+             base_time.isoformat(), 1200, 82, True, True, "super_fan", 4920,
+             json.dumps(["Valorant", "Just Chatting"]), "6-month sub streak"),
+            (_generate_id(), channel, "viewer_jenny", (base_time - timedelta(days=60)).isoformat(),
+             (base_time - timedelta(days=1)).isoformat(), 210, 28, False, True, "regular", 1680,
+             json.dumps(["Fortnite"]), ""),
+            (_generate_id(), channel, "mod_sarah", (base_time - timedelta(days=365)).isoformat(),
+             base_time.isoformat(), 3500, 150, True, True, "super_fan", 9000,
+             json.dumps(["Valorant", "Fortnite", "Just Chatting"]), "Head moderator"),
+            (_generate_id(), channel, "lurker_dave", (base_time - timedelta(days=30)).isoformat(),
+             (base_time - timedelta(days=14)).isoformat(), 12, 8, False, True, "at_risk", 480,
+             json.dumps(["Just Chatting"]), ""),
+            (_generate_id(), channel, "new_viewer_1", (base_time - timedelta(days=3)).isoformat(),
+             base_time.isoformat(), 5, 2, False, False, "new", 60,
+             json.dumps(["Fortnite"]), ""),
+            (_generate_id(), channel, "new_viewer_2", (base_time - timedelta(days=2)).isoformat(),
+             (base_time - timedelta(days=2)).isoformat(), 3, 1, False, True, "new", 30,
+             json.dumps(["Fortnite"]), ""),
+            (_generate_id(), channel, "old_regular_tom", (base_time - timedelta(days=120)).isoformat(),
+             (base_time - timedelta(days=21)).isoformat(), 350, 40, False, True, "at_risk", 2400,
+             json.dumps(["Valorant"]), "Used to be very active"),
+        ]
+        for vp in viewer_profiles:
+            await conn.execute(
+                """INSERT INTO viewer_profiles
+                   (id, channel, username, first_seen, last_seen, total_messages, streams_watched,
+                    is_subscriber, is_follower, segment, watch_time_minutes, favorite_games, notes)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                vp,
+            )
+
+        # ========== AI Post-Stream Debrief ==========
+        debrief_id = _generate_id()
+        await conn.execute(
+            """INSERT INTO debrief_results
+               (id, channel, session_id, summary, top_moments, sentiment_timeline,
+                chat_highlights, recommendations, title_suggestions, trending_topics, created_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (debrief_id, channel, intel_sessions[1][0],
+             "Great 4-hour Valorant stream with strong viewer engagement. Chat was most active during "
+             "competitive matches with peak participation at the 2-hour mark. Viewer sentiment was "
+             "overwhelmingly positive (82% positive). The stream gained 45 new followers and 12 new "
+             "subscribers, making it your best growth stream this week.",
+             json.dumps([
+                 {"minute": 45, "description": "Ace clutch in ranked", "intensity": 95},
+                 {"minute": 120, "description": "Viewer games started - chat exploded", "intensity": 88},
+                 {"minute": 195, "description": "Hit Immortal rank - celebration", "intensity": 92},
+             ]),
+             json.dumps([
+                 {"minute": 0, "sentiment": 0.7, "label": "positive"},
+                 {"minute": 30, "sentiment": 0.8, "label": "positive"},
+                 {"minute": 60, "sentiment": 0.6, "label": "positive"},
+                 {"minute": 90, "sentiment": 0.4, "label": "neutral"},
+                 {"minute": 120, "sentiment": 0.9, "label": "very_positive"},
+                 {"minute": 150, "sentiment": 0.85, "label": "positive"},
+                 {"minute": 180, "sentiment": 0.75, "label": "positive"},
+                 {"minute": 210, "sentiment": 0.92, "label": "very_positive"},
+                 {"minute": 240, "sentiment": 0.88, "label": "positive"},
+             ]),
+             json.dumps([
+                 "LETS GOOO ACE!", "This is the best stream ever", "IMMORTAL HYPE",
+                 "viewer_andy gifted 5 subs!", "Chat was going crazy during viewer games",
+             ]),
+             json.dumps([
+                 "Schedule more viewer game sessions - they drove 40% more engagement",
+                 "Consider streaming Valorant ranked during Thursday evenings for best growth",
+                 "Engage more during Just Chatting segments to maintain chat activity",
+                 "Try a subathon during your next milestone celebration",
+             ]),
+             json.dumps([
+                 "Road to Immortal: The Journey", "Ranked Grind + Viewer Games",
+                 "Immortal achieved! What's next?",
+             ]),
+             json.dumps(["Valorant ranked", "viewer games", "rank up celebration"]),
+             now),
+        )
+
+        # ========== Discord Bot Config ==========
+        await conn.execute(
+            """INSERT INTO discord_bot_configs
+               (id, channel, guild_id, webhook_url, go_live_enabled, go_live_channel_id,
+                go_live_message, chat_bridge_enabled, chat_bridge_channel_id,
+                sub_sync_enabled, sub_sync_role_id, stats_commands_enabled,
+                schedule_display_enabled, schedule_channel_id, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (_generate_id(), channel, "123456789012345678",
+             "https://discord.com/api/webhooks/example/token",
+             True, "987654321098765432",
+             "{streamer} is now live on Kick! Playing {game} - {title}",
+             False, "", False, "", True, True, "111222333444555666", now),
+        )
+
+        # ========== Revenue Entries ==========
+        revenue_data = [
+            (_generate_id(), channel, "subscription", 49.95, "USD", "Monthly subs (10 x $4.99)",
+             None, (base_time - timedelta(days=30)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "subscription", 74.85, "USD", "Monthly subs (15 x $4.99)",
+             None, (base_time - timedelta(days=0)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "tip", 25.00, "USD", "Tip from sub_mike",
+             intel_sessions[1][0], (base_time - timedelta(days=4)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "tip", 50.00, "USD", "Tip from viewer_andy",
+             intel_sessions[3][0], (base_time - timedelta(days=1)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "sponsor", 500.00, "USD", "GamerSupps sponsorship - March",
+             None, (base_time - timedelta(days=15)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "merch", 120.00, "USD", "T-shirt sales (6 units)",
+             None, (base_time - timedelta(days=10)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "tip", 10.00, "USD", "Tip from new_viewer_1",
+             intel_sessions[4][0], base_time.strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "subscription", 39.92, "USD", "Monthly subs (8 x $4.99)",
+             None, (base_time - timedelta(days=60)).strftime("%Y-%m-%d")),
+            (_generate_id(), channel, "sponsor", 300.00, "USD", "Energy drink promo - Feb",
+             None, (base_time - timedelta(days=45)).strftime("%Y-%m-%d")),
+        ]
+        for rv in revenue_data:
+            await conn.execute(
+                """INSERT INTO revenue_entries
+                   (id, channel, source, amount, currency, description, stream_session_id, date, created_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (*rv, now),
+            )
+
+        # ========== Highlight Markers ==========
+        highlights = [
+            (_generate_id(), channel, intel_sessions[1][0], 2700, 95.0, 12.5, 30,
+             "ACE CLUTCH! Chat went absolutely wild",
+             json.dumps(["LETS GOOO", "ACE!!", "NO WAY", "INSANE", "clip it!!!"]), "hype"),
+            (_generate_id(), channel, intel_sessions[1][0], 7200, 88.0, 10.2, 45,
+             "Viewer games started - massive chat spike",
+             json.dumps(["pick me!", "!join", "viewer games HYPE", "finally!", "lets play"]), "hype"),
+            (_generate_id(), channel, intel_sessions[1][0], 11700, 92.0, 15.0, 60,
+             "Hit Immortal rank - celebration moment",
+             json.dumps(["IMMORTAL", "HE DID IT", "LETS GOOO", "GG", "POGGERS"]), "clutch"),
+            (_generate_id(), channel, intel_sessions[3][0], 5400, 85.0, 9.8, 25,
+             "1v5 clutch in tournament practice",
+             json.dumps(["CLUTCH GOD", "HOW??", "insane play", "pro level"]), "clutch"),
+            (_generate_id(), channel, intel_sessions[3][0], 12600, 78.0, 8.0, 20,
+             "Funny fail moment - fell off map",
+             json.dumps(["LMAOOO", "BRO WHAT", "hahaha", "clip that", "fail"]), "funny"),
+        ]
+        for hl in highlights:
+            await conn.execute(
+                """INSERT INTO highlight_markers
+                   (id, channel, session_id, timestamp_offset_seconds, intensity, message_rate,
+                    duration_seconds, description, sample_messages, category, created_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (*hl, now),
             )
 
         await conn.commit()
