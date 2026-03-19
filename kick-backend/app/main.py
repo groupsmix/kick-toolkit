@@ -33,6 +33,20 @@ from app.routers.debrief import router as debrief_router
 from app.routers.discord_bot import router as discord_bot_router
 from app.routers.revenue import router as revenue_router
 from app.routers.highlights import router as highlights_router
+from app.routers.timed_messages import router as timed_messages_router
+from app.routers.polls import router as polls_router
+from app.routers.predictions import router as predictions_router
+from app.routers.translation import router as translation_router
+from app.routers.viewer_count import router as viewer_count_router
+from app.routers.game_queue import router as game_queue_router
+from app.routers.match_history import router as match_history_router
+from app.routers.kd_counter import router as kd_counter_router
+from app.routers.achievements import router as achievements_router
+from app.routers.game_challenges import router as game_challenges_router
+from app.routers.rank_tracker import router as rank_tracker_router
+from app.routers.gambling import router as gambling_router
+from app.routers.irl import router as irl_router
+from app.routers.creative import router as creative_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -126,6 +140,20 @@ app.include_router(debrief_router)
 app.include_router(discord_bot_router)
 app.include_router(revenue_router)
 app.include_router(highlights_router)
+app.include_router(timed_messages_router)
+app.include_router(polls_router)
+app.include_router(predictions_router)
+app.include_router(translation_router)
+app.include_router(viewer_count_router)
+app.include_router(game_queue_router)
+app.include_router(match_history_router)
+app.include_router(kd_counter_router)
+app.include_router(achievements_router)
+app.include_router(game_challenges_router)
+app.include_router(rank_tracker_router)
+app.include_router(gambling_router)
+app.include_router(irl_router)
+app.include_router(creative_router)
 
 
 @app.get("/healthz")

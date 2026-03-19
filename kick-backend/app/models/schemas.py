@@ -1237,3 +1237,520 @@ class HighlightSummary(BaseModel):
     peak_moment: Optional[HighlightMarker] = None
     highlights: list[HighlightMarker] = []
     stream_summary: str = ""
+
+
+# ========== Timed Messages ==========
+class TimedMessage(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    message: str
+    interval_minutes: int = 15
+    enabled: bool = True
+    last_sent_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class TimedMessageCreate(BaseModel):
+    message: str
+    interval_minutes: int = 15
+    enabled: bool = True
+
+
+class TimedMessageUpdate(BaseModel):
+    message: Optional[str] = None
+    interval_minutes: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+# ========== Chat Polls & Voting ==========
+class PollCreate(BaseModel):
+    title: str
+    options: list[str]
+    duration_seconds: int = 300
+    poll_type: str = "standard"  # "standard", "game_map_vote", "color_palette"
+
+
+class PollVote(BaseModel):
+    username: str
+    option_index: int
+
+
+class Poll(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    title: str
+    options: list[str] = []
+    votes: dict = {}  # {"option_index": count}
+    voters: list[str] = []
+    poll_type: str = "standard"
+    status: str = "active"  # "active", "closed"
+    duration_seconds: int = 300
+    created_at: Optional[str] = None
+    closed_at: Optional[str] = None
+
+
+# ========== Predictions System ==========
+class PredictionCreate(BaseModel):
+    title: str
+    outcomes: list[str]
+    lock_seconds: int = 300
+
+
+class PredictionBet(BaseModel):
+    username: str
+    outcome_index: int
+    amount: int
+
+
+class PredictionResolve(BaseModel):
+    winning_outcome_index: int
+
+
+class Prediction(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    title: str
+    outcomes: list[str] = []
+    outcome_pools: dict = {}  # {"0": total_points, "1": total_points}
+    bets: list[dict] = []
+    status: str = "open"  # "open", "locked", "resolved", "cancelled"
+    winning_outcome_index: Optional[int] = None
+    lock_seconds: int = 300
+    created_at: Optional[str] = None
+    locked_at: Optional[str] = None
+    resolved_at: Optional[str] = None
+
+
+# ========== Multi-Language Chat Translation ==========
+class TranslationSettings(BaseModel):
+    channel: str
+    enabled: bool = False
+    target_language: str = "en"
+    auto_translate: bool = False
+    updated_at: Optional[str] = None
+
+
+class TranslationSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    target_language: Optional[str] = None
+    auto_translate: Optional[bool] = None
+
+
+class TranslationRequest(BaseModel):
+    text: str
+    target_language: str = "en"
+    source_language: Optional[str] = None
+
+
+class TranslationResult(BaseModel):
+    original_text: str
+    translated_text: str
+    source_language: str
+    target_language: str
+
+
+# ========== Game Queue System ==========
+class GameQueueCreate(BaseModel):
+    game: str = ""
+    max_size: int = 20
+
+
+class GameQueueEntry(BaseModel):
+    username: str
+    note: str = ""
+
+
+class GameQueue(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    game: str = ""
+    status: str = "open"  # "open", "closed", "in_progress"
+    max_size: int = 20
+    entries: list[dict] = []
+    created_at: Optional[str] = None
+
+
+class TeamPickResult(BaseModel):
+    teams: list[list[str]] = []
+    team_size: int = 2
+
+
+# ========== Match History Tracker ==========
+class MatchRecordCreate(BaseModel):
+    game: str
+    opponent: str = ""
+    result: str  # "win", "loss", "draw"
+    score: str = ""
+    notes: str = ""
+
+
+class MatchRecord(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    game: str
+    opponent: str = ""
+    result: str  # "win", "loss", "draw"
+    score: str = ""
+    notes: str = ""
+    played_at: Optional[str] = None
+
+
+class MatchStats(BaseModel):
+    channel: str
+    total_matches: int = 0
+    wins: int = 0
+    losses: int = 0
+    draws: int = 0
+    win_rate: float = 0.0
+    current_streak: int = 0
+    streak_type: str = ""  # "win", "loss"
+    by_game: list[dict] = []
+
+
+# ========== Kill/Death Counter ==========
+class KDCounter(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    game: str = ""
+    kills: int = 0
+    deaths: int = 0
+    assists: int = 0
+    session_id: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class KDCounterUpdate(BaseModel):
+    kills: Optional[int] = None
+    deaths: Optional[int] = None
+    assists: Optional[int] = None
+    game: Optional[str] = None
+
+
+# ========== Achievement Tracker ==========
+class AchievementCreate(BaseModel):
+    game: str = ""
+    title: str
+    description: str = ""
+    icon: str = "trophy"
+
+
+class Achievement(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    game: str = ""
+    title: str
+    description: str = ""
+    icon: str = "trophy"
+    unlocked: bool = False
+    unlocked_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+# ========== Game Challenge System ==========
+class GameChallengeCreate(BaseModel):
+    title: str
+    description: str = ""
+    reward_points: int = 0
+    creator_username: str = ""
+
+
+class GameChallenge(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    creator_username: str = ""
+    title: str
+    description: str = ""
+    reward_points: int = 0
+    status: str = "pending"  # "pending", "accepted", "completed", "failed", "rejected"
+    created_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+# ========== Rank Tracker ==========
+class RankTrackerUpdate(BaseModel):
+    game: str
+    current_rank: str
+    rank_points: int = 0
+    peak_rank: Optional[str] = None
+
+
+class RankTracker(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    game: str
+    current_rank: str = ""
+    peak_rank: str = ""
+    rank_points: int = 0
+    updated_at: Optional[str] = None
+
+
+# ========== Slot Request Queue (Gambling) ==========
+class SlotRequestCreate(BaseModel):
+    username: str
+    slot_name: str
+    note: str = ""
+
+
+class SlotRequest(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    slot_name: str
+    note: str = ""
+    status: str = "pending"  # "pending", "playing", "played", "rejected"
+    position: int = 0
+    created_at: Optional[str] = None
+
+
+class BannedSlot(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    slot_name: str
+    reason: str = ""
+    added_at: Optional[str] = None
+
+
+class BannedSlotCreate(BaseModel):
+    slot_name: str
+    reason: str = ""
+
+
+# ========== Gambling Session Tracker ==========
+class GamblingSessionCreate(BaseModel):
+    start_balance: float = 0.0
+
+
+class GamblingSession(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    start_balance: float = 0.0
+    current_balance: float = 0.0
+    total_wagered: float = 0.0
+    total_won: float = 0.0
+    biggest_win: float = 0.0
+    biggest_loss: float = 0.0
+    status: str = "active"  # "active", "ended"
+    started_at: Optional[str] = None
+    ended_at: Optional[str] = None
+
+
+class GamblingSessionUpdate(BaseModel):
+    current_balance: Optional[float] = None
+    status: Optional[str] = None
+
+
+class BetLogCreate(BaseModel):
+    slot_name: str = ""
+    bet_amount: float
+    win_amount: float = 0.0
+    result: str = "loss"  # "win", "loss"
+
+
+class BetLogEntry(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    session_id: str
+    slot_name: str = ""
+    bet_amount: float = 0.0
+    win_amount: float = 0.0
+    result: str = "loss"
+    running_total: float = 0.0
+    created_at: Optional[str] = None
+
+
+class SlotRatingCreate(BaseModel):
+    username: str
+    slot_name: str
+    rating: int = 5
+    comment: str = ""
+
+
+class SlotRating(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    slot_name: str
+    rating: int = 5
+    comment: str = ""
+    created_at: Optional[str] = None
+
+
+class BalanceMilestone(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    amount: float
+    direction: str = "up"  # "up", "down"
+    triggered_at: Optional[str] = None
+
+
+class RainEvent(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    amount: float = 0.0
+    currency: str = "USD"
+    source: str = ""
+    tip_count: int = 0
+    created_at: Optional[str] = None
+
+
+class RainEventCreate(BaseModel):
+    amount: float
+    currency: str = "USD"
+    source: str = ""
+    tip_count: int = 0
+
+
+# ========== IRL Features ==========
+class StreamerLocationUpdate(BaseModel):
+    city: str = ""
+    country: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class StreamerLocation(BaseModel):
+    channel: str
+    city: str = ""
+    country: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    updated_at: Optional[str] = None
+
+
+class DonationGoalCreate(BaseModel):
+    title: str
+    target_amount: float
+    currency: str = "USD"
+
+
+class DonationGoal(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    title: str
+    target_amount: float = 0.0
+    current_amount: float = 0.0
+    currency: str = "USD"
+    status: str = "active"  # "active", "completed", "cancelled"
+    created_at: Optional[str] = None
+
+
+class DonationGoalUpdate(BaseModel):
+    current_amount: Optional[float] = None
+    status: Optional[str] = None
+    title: Optional[str] = None
+
+
+class QuestionCreate(BaseModel):
+    username: str
+    question: str
+    priority: int = 0
+
+
+class Question(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    question: str
+    status: str = "pending"  # "pending", "answered", "skipped"
+    priority: int = 0
+    created_at: Optional[str] = None
+
+
+class PhotoRequestCreate(BaseModel):
+    username: str
+    description: str = ""
+    tip_amount: float = 0.0
+
+
+class PhotoRequest(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    description: str = ""
+    status: str = "pending"  # "pending", "accepted", "completed", "rejected"
+    tip_amount: float = 0.0
+    created_at: Optional[str] = None
+
+
+class WheelChallengeCreate(BaseModel):
+    username: str = ""
+    challenge_text: str
+
+
+class WheelChallenge(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str = ""
+    challenge_text: str
+    used: bool = False
+    created_at: Optional[str] = None
+
+
+class CountdownTimer(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    title: str = ""
+    end_time: str = ""
+    style: str = "default"
+    active: bool = True
+    created_at: Optional[str] = None
+
+
+class CountdownTimerCreate(BaseModel):
+    title: str = ""
+    end_time: str
+    style: str = "default"
+
+
+# ========== Creative/Music Features ==========
+class ArtCommissionCreate(BaseModel):
+    username: str
+    description: str
+    reference_url: str = ""
+    style: str = ""
+    size: str = ""
+    price: float = 0.0
+
+
+class ArtCommission(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    description: str
+    reference_url: str = ""
+    style: str = ""
+    size: str = ""
+    price: float = 0.0
+    status: str = "pending"  # "pending", "accepted", "in_progress", "completed", "rejected"
+    created_at: Optional[str] = None
+
+
+class TutorialRequestCreate(BaseModel):
+    username: str
+    topic: str
+
+
+class TutorialRequest(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    topic: str
+    votes: int = 0
+    status: str = "pending"  # "pending", "completed"
+    created_at: Optional[str] = None
+
+
+class CollabRequestCreate(BaseModel):
+    requester_username: str
+    requester_channel: str = ""
+    proposal: str
+
+
+class CollabRequest(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    requester_username: str
+    requester_channel: str = ""
+    proposal: str
+    status: str = "pending"  # "pending", "accepted", "declined", "completed"
+    created_at: Optional[str] = None

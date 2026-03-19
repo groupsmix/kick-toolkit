@@ -40,6 +40,20 @@ import { PricingPage } from "@/pages/PricingPage";
 import { TermsPage } from "@/pages/TermsPage";
 import { PrivacyPage } from "@/pages/PrivacyPage";
 import { DisclaimerPage } from "@/pages/DisclaimerPage";
+import { TimedMessagesPage } from "@/pages/TimedMessagesPage";
+import { PollsPage } from "@/pages/PollsPage";
+import { PredictionsPage } from "@/pages/PredictionsPage";
+import { TranslationPage } from "@/pages/TranslationPage";
+import { ViewerCountPage } from "@/pages/ViewerCountPage";
+import { GameQueuePage } from "@/pages/GameQueuePage";
+import { MatchHistoryPage } from "@/pages/MatchHistoryPage";
+import { KDCounterPage } from "@/pages/KDCounterPage";
+import { AchievementsPage } from "@/pages/AchievementsPage";
+import { GameChallengesPage } from "@/pages/GameChallengesPage";
+import { RankTrackerPage } from "@/pages/RankTrackerPage";
+import { GamblingPage } from "@/pages/GamblingPage";
+import { IRLPage } from "@/pages/IRLPage";
+import { CreativePage } from "@/pages/CreativePage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -331,6 +345,147 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <HighlightsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/timed-messages"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <TimedMessagesPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/polls"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PollsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/predictions"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PredictionsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/translation"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <TranslationPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/viewer-count"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ViewerCountPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game-queue"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <GameQueuePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/match-history"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <MatchHistoryPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/kd-counter"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <KDCounterPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/achievements"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <AchievementsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/game-challenges"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <GameChallengesPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/rank-tracker"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <RankTrackerPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gambling"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <GamblingPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/irl"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <IRLPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/creative"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <CreativePage />
             </AppLayout>
           </ProtectedRoute>
         }

@@ -861,6 +861,321 @@ CREATE TABLE IF NOT EXISTS highlight_markers (
     category TEXT NOT NULL DEFAULT 'hype',
     created_at TEXT NOT NULL
 );
+
+-- ========== Timed Messages ==========
+CREATE TABLE IF NOT EXISTS timed_messages (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    message TEXT NOT NULL,
+    interval_minutes INT NOT NULL DEFAULT 15,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    last_sent_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Chat Polls ==========
+CREATE TABLE IF NOT EXISTS polls (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    title TEXT NOT NULL,
+    options JSONB NOT NULL DEFAULT '[]',
+    votes JSONB NOT NULL DEFAULT '{}',
+    voters JSONB NOT NULL DEFAULT '[]',
+    poll_type TEXT NOT NULL DEFAULT 'standard',
+    status TEXT NOT NULL DEFAULT 'active',
+    duration_seconds INT NOT NULL DEFAULT 300,
+    created_at TEXT NOT NULL,
+    closed_at TEXT
+);
+
+-- ========== Predictions ==========
+CREATE TABLE IF NOT EXISTS predictions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    title TEXT NOT NULL,
+    outcomes JSONB NOT NULL DEFAULT '[]',
+    outcome_pools JSONB NOT NULL DEFAULT '{}',
+    bets JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'open',
+    winning_outcome_index INT,
+    lock_seconds INT NOT NULL DEFAULT 300,
+    created_at TEXT NOT NULL,
+    locked_at TEXT,
+    resolved_at TEXT
+);
+
+-- ========== Translation Settings ==========
+CREATE TABLE IF NOT EXISTS translation_settings (
+    channel TEXT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    target_language TEXT NOT NULL DEFAULT 'en',
+    auto_translate BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TEXT NOT NULL
+);
+
+-- ========== Viewer Count Tracker ==========
+CREATE TABLE IF NOT EXISTS viewer_count_snapshots (
+    id SERIAL PRIMARY KEY,
+    channel TEXT NOT NULL,
+    viewer_count INT NOT NULL DEFAULT 0,
+    recorded_at TEXT NOT NULL
+);
+
+-- ========== Game Queue ==========
+CREATE TABLE IF NOT EXISTS game_queues (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    game TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open',
+    max_size INT NOT NULL DEFAULT 20,
+    entries JSONB NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+
+-- ========== Match History ==========
+CREATE TABLE IF NOT EXISTS match_records (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    game TEXT NOT NULL,
+    opponent TEXT NOT NULL DEFAULT '',
+    result TEXT NOT NULL,
+    score TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    played_at TEXT NOT NULL
+);
+
+-- ========== Kill/Death Counter ==========
+CREATE TABLE IF NOT EXISTS kd_counters (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    game TEXT NOT NULL DEFAULT '',
+    kills INT NOT NULL DEFAULT 0,
+    deaths INT NOT NULL DEFAULT 0,
+    assists INT NOT NULL DEFAULT 0,
+    session_id TEXT,
+    updated_at TEXT NOT NULL
+);
+
+-- ========== Achievement Tracker ==========
+CREATE TABLE IF NOT EXISTS achievements (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    game TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    icon TEXT NOT NULL DEFAULT 'trophy',
+    unlocked BOOLEAN NOT NULL DEFAULT FALSE,
+    unlocked_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Game Challenges ==========
+CREATE TABLE IF NOT EXISTS game_challenges (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    creator_username TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    reward_points INT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+);
+
+-- ========== Rank Tracker ==========
+CREATE TABLE IF NOT EXISTS rank_trackers (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    game TEXT NOT NULL,
+    current_rank TEXT NOT NULL DEFAULT '',
+    peak_rank TEXT NOT NULL DEFAULT '',
+    rank_points INT NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL,
+    UNIQUE(channel, game)
+);
+
+-- ========== Slot Request Queue ==========
+CREATE TABLE IF NOT EXISTS slot_requests (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    slot_name TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    position INT NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Banned Slots ==========
+CREATE TABLE IF NOT EXISTS banned_slots (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    slot_name TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    added_at TEXT NOT NULL,
+    UNIQUE(channel, slot_name)
+);
+
+-- ========== Gambling Sessions ==========
+CREATE TABLE IF NOT EXISTS gambling_sessions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    start_balance FLOAT NOT NULL DEFAULT 0.0,
+    current_balance FLOAT NOT NULL DEFAULT 0.0,
+    total_wagered FLOAT NOT NULL DEFAULT 0.0,
+    total_won FLOAT NOT NULL DEFAULT 0.0,
+    biggest_win FLOAT NOT NULL DEFAULT 0.0,
+    biggest_loss FLOAT NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'active',
+    started_at TEXT NOT NULL,
+    ended_at TEXT
+);
+
+-- ========== Bet Log ==========
+CREATE TABLE IF NOT EXISTS bet_logs (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    slot_name TEXT NOT NULL DEFAULT '',
+    bet_amount FLOAT NOT NULL DEFAULT 0.0,
+    win_amount FLOAT NOT NULL DEFAULT 0.0,
+    result TEXT NOT NULL DEFAULT 'loss',
+    running_total FLOAT NOT NULL DEFAULT 0.0,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Slot Ratings ==========
+CREATE TABLE IF NOT EXISTS slot_ratings (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    slot_name TEXT NOT NULL,
+    rating INT NOT NULL DEFAULT 5,
+    comment TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(channel, username, slot_name)
+);
+
+-- ========== Balance Milestones ==========
+CREATE TABLE IF NOT EXISTS balance_milestones (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    amount FLOAT NOT NULL,
+    direction TEXT NOT NULL DEFAULT 'up',
+    triggered_at TEXT NOT NULL
+);
+
+-- ========== Rain/Tip Tracker ==========
+CREATE TABLE IF NOT EXISTS rain_events (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    amount FLOAT NOT NULL DEFAULT 0.0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    source TEXT NOT NULL DEFAULT '',
+    tip_count INT NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+-- ========== IRL: Streamer Location ==========
+CREATE TABLE IF NOT EXISTS streamer_locations (
+    channel TEXT PRIMARY KEY,
+    city TEXT NOT NULL DEFAULT '',
+    country TEXT NOT NULL DEFAULT '',
+    latitude FLOAT,
+    longitude FLOAT,
+    updated_at TEXT NOT NULL
+);
+
+-- ========== Donation Goals ==========
+CREATE TABLE IF NOT EXISTS donation_goals (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    title TEXT NOT NULL,
+    target_amount FLOAT NOT NULL DEFAULT 0.0,
+    current_amount FLOAT NOT NULL DEFAULT 0.0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL
+);
+
+-- ========== Question Queue ==========
+CREATE TABLE IF NOT EXISTS questions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    question TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    priority INT NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Photo Requests ==========
+CREATE TABLE IF NOT EXISTS photo_requests (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    tip_amount FLOAT NOT NULL DEFAULT 0.0,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Challenge Wheel ==========
+CREATE TABLE IF NOT EXISTS wheel_challenges (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL DEFAULT '',
+    challenge_text TEXT NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Countdown Timer ==========
+CREATE TABLE IF NOT EXISTS countdown_timers (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    end_time TEXT NOT NULL,
+    style TEXT NOT NULL DEFAULT 'default',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Art Commissions ==========
+CREATE TABLE IF NOT EXISTS art_commissions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    description TEXT NOT NULL,
+    reference_url TEXT NOT NULL DEFAULT '',
+    style TEXT NOT NULL DEFAULT '',
+    size TEXT NOT NULL DEFAULT '',
+    price FLOAT NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);
+
+-- ========== Tutorial Requests ==========
+CREATE TABLE IF NOT EXISTS tutorial_requests (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    votes INT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);
+
+-- ========== Collaboration Requests ==========
+CREATE TABLE IF NOT EXISTS collab_requests (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    requester_username TEXT NOT NULL,
+    requester_channel TEXT NOT NULL DEFAULT '',
+    proposal TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);
 """
 
 
