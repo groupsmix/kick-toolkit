@@ -29,7 +29,12 @@ async def login():
 
 @router.get("/callback")
 async def callback(code: str, state: str, response: Response):
-    """Handle OAuth callback from Kick — exchange code for tokens."""
+    """Handle OAuth callback from Kick — exchange code for tokens.
+
+    The session_id is passed via a URL fragment (#) instead of a query param
+    so that it is never sent to the server in Referer headers or logged in
+    server access logs.
+    """
     result = await exchange_code(code, state)
     if not result:
         logger.error("OAuth exchange failed for state=%s", state)
@@ -38,8 +43,13 @@ async def callback(code: str, state: str, response: Response):
     session_id = result["session_id"]
     logger.info("OAuth exchange succeeded, session=%s", session_id[:8])
 
-    redirect_url = f"{FRONTEND_URL}/auth/callback?session_id={session_id}"
+    # Use fragment (#) instead of query param (?) to prevent session_id from
+    # leaking via Referer headers, server logs, and browser history.
+    redirect_url = f"{FRONTEND_URL}/auth/callback#session_id={session_id}"
     resp = RedirectResponse(url=redirect_url)
+    # Prevent the redirect URL from being cached or stored in browser history
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Referrer-Policy"] = "no-referrer"
     return resp
 
 
@@ -54,9 +64,22 @@ async def me(session: dict = Depends(require_auth)):
         except (json.JSONDecodeError, TypeError):
             user_data = {}
 
+    # Return expires_in so the frontend can schedule token refresh
+    expires_in = None
+    expires_at = session.get("expires_at")
+    if expires_at:
+        from datetime import datetime, timezone
+        try:
+            exp_dt = datetime.fromisoformat(expires_at)
+            remaining = (exp_dt - datetime.now(timezone.utc)).total_seconds()
+            expires_in = max(int(remaining), 0)
+        except (ValueError, TypeError):
+            pass
+
     return {
         "user": user_data,
         "scope": session.get("scope", ""),
+        "expires_in": expires_in,
     }
 
 
