@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers.auth import router as auth_router
 from app.routers.bot import router as bot_router, mod_router
 from app.routers.chatlogs import router as chatlogs_router
 from app.routers.giveaway import router as giveaway_router
@@ -20,6 +21,7 @@ app.add_middleware(
 )
 
 # Include all routers
+app.include_router(auth_router)
 app.include_router(bot_router)
 app.include_router(mod_router)
 app.include_router(chatlogs_router)

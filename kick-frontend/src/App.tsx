@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { DashboardPage } from "@/pages/DashboardPage";
@@ -8,6 +9,8 @@ import { GiveawayPage } from "@/pages/GiveawayPage";
 import { AntiAltPage } from "@/pages/AntiAltPage";
 import { TournamentPage } from "@/pages/TournamentPage";
 import { IdeasPage } from "@/pages/IdeasPage";
+import { LoginPage } from "@/pages/LoginPage";
+import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 
 const PAGE_CONFIG: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: "Dashboard", subtitle: "Overview of your Kick channel" },
@@ -19,9 +22,36 @@ const PAGE_CONFIG: Record<string, { title: string; subtitle: string }> = {
   ideas: { title: "Giveaway Ideas", subtitle: "Get inspiration for your next giveaway" },
 };
 
-function App() {
+function AppContent() {
+  const { isAuthenticated, loading, user } = useAuth();
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const handleAuthComplete = useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  // Check if we're on the auth callback path
+  const isAuthCallback =
+    window.location.pathname === "/auth/callback" ||
+    window.location.search.includes("session_id=") ||
+    (window.location.search.includes("code=") && window.location.search.includes("state="));
+
+  if (isAuthCallback) {
+    return <AuthCallbackPage onComplete={handleAuthComplete} />;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   const pageConfig = PAGE_CONFIG[currentPage] || PAGE_CONFIG.dashboard;
 
@@ -47,12 +77,20 @@ function App() {
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title={pageConfig.title} subtitle={pageConfig.subtitle} />
+        <Header title={pageConfig.title} subtitle={pageConfig.subtitle} user={user} />
         <main className="flex-1 overflow-y-auto p-6">
           {renderPage()}
         </main>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
