@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
+import { PageSkeleton } from "@/components/LoadingSkeleton";
 import { Toaster } from "sonner";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Suspense, lazy } from "react";
@@ -56,6 +58,15 @@ function PageSpinner() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-zinc-950">
       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+/** Suspense fallback that shows a content skeleton inside the app layout. */
+function LayoutSkeleton() {
+  return (
+    <div className="p-6">
+      <PageSkeleton />
     </div>
   );
 }
@@ -144,7 +155,11 @@ function AppRoutes() {
             element={
               <ProtectedRoute>
                 <AppLayout>
-                  <Component />
+                  <RouteErrorBoundary pageName={path.replace("/", "").replace(/-/g, " ")}>
+                    <Suspense fallback={<LayoutSkeleton />}>
+                      <Component />
+                    </Suspense>
+                  </RouteErrorBoundary>
                 </AppLayout>
               </ProtectedRoute>
             }
