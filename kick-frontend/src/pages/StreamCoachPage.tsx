@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,9 +8,19 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/hooks/useApi";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+} from "recharts";
 import {
   Brain,
   Play,
@@ -30,6 +40,10 @@ import {
   Gamepad2,
   Coffee,
   RefreshCw,
+  SmilePlus,
+  Frown,
+  Meh,
+  Timer,
 } from "lucide-react";
 
 interface CoachSettings {
@@ -71,6 +85,20 @@ interface CoachSuggestion {
   dismissed_at: string | null;
 }
 
+interface SentimentData {
+  score: number;
+  label: string;
+  positive: number;
+  negative: number;
+  total: number;
+}
+
+interface ChatActivityBucket {
+  bucket: string;
+  msg_count: number;
+  unique_chatters: number;
+}
+
 interface AnalysisResult {
   suggestions: CoachSuggestion[];
   metrics: {
@@ -81,6 +109,7 @@ interface AnalysisResult {
     stream_duration_minutes: number;
     game: string;
     snapshot_count: number;
+    sentiment?: SentimentData;
   };
 }
 
@@ -139,6 +168,14 @@ export function StreamCoachPage() {
   const [viewerCount, setViewerCount] = useState(0);
   const [gameName, setGameName] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [autoAnalyze, setAutoAnalyze] = useState(false);
+  const [chatActivity, setChatActivity] = useState<ChatActivityBucket[]>([]);
+  const autoAnalyzeRef = useRef(false);
+
+  // Keep ref in sync so the interval callback always sees the latest value
+  useEffect(() => {
+    autoAnalyzeRef.current = autoAnalyze;
+  }, [autoAnalyze]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -188,6 +225,49 @@ export function StreamCoachPage() {
     }, 30_000);
     return () => clearInterval(interval);
   }, [activeSession]);
+
+  // Auto-analysis: trigger analysis every 60s when enabled
+  useEffect(() => {
+    if (!activeSession) return;
+    const interval = setInterval(async () => {
+      if (!autoAnalyzeRef.current) return;
+      try {
+        const result = await api<AnalysisResult>("/api/coach/analyze", {
+          method: "POST",
+          body: JSON.stringify({
+            channel,
+            session_id: activeSession.id,
+            viewer_count: viewerCount,
+            game: gameName,
+          }),
+        });
+        setMetrics(result.metrics);
+        if (result.suggestions.length > 0) {
+          setSuggestions((prev) => [...result.suggestions, ...prev]);
+        }
+      } catch {
+        // silently retry next interval
+      }
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [activeSession, channel, viewerCount, gameName]);
+
+  // Fetch chat activity data for chart
+  const fetchChatActivity = useCallback(async () => {
+    if (!channel || !activeSession) return;
+    try {
+      const data = await api<ChatActivityBucket[]>(
+        `/api/coach/chat-activity/${channel}?window_minutes=60`
+      );
+      setChatActivity(data);
+    } catch {
+      // silently fail
+    }
+  }, [channel, activeSession]);
+
+  useEffect(() => {
+    fetchChatActivity();
+  }, [fetchChatActivity]);
 
   const startSession = async () => {
     try {
@@ -503,6 +583,26 @@ export function StreamCoachPage() {
                     className="bg-zinc-800 border-zinc-700 text-white h-8 text-sm"
                   />
                 </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant={autoAnalyze ? "default" : "outline"}
+                        className={autoAnalyze
+                          ? "bg-emerald-500 hover:bg-emerald-600 text-black h-8 w-8 p-0"
+                          : "border-zinc-700 text-zinc-400 hover:text-white h-8 w-8 p-0"
+                        }
+                        onClick={() => setAutoAnalyze(!autoAnalyze)}
+                      >
+                        <Timer className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p className="text-xs">{autoAnalyze ? "Auto-analyze ON (60s)" : "Enable auto-analyze"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <Button
                   size="sm"
                   className="bg-violet-500 hover:bg-violet-600 text-white"
@@ -588,6 +688,37 @@ export function StreamCoachPage() {
                     </div>
                   </CardContent>
                 </Card>
+                {metrics.sentiment && (
+                  <Card className={`border ${
+                    metrics.sentiment.label === "positive"
+                      ? "bg-emerald-500/5 border-emerald-500/20"
+                      : metrics.sentiment.label === "negative"
+                      ? "bg-red-500/5 border-red-500/20"
+                      : "bg-zinc-900/50 border-zinc-800"
+                  }`}>
+                    <CardContent className="p-3 flex items-center gap-2">
+                      {metrics.sentiment.label === "positive" ? (
+                        <SmilePlus className="w-5 h-5 text-emerald-400" />
+                      ) : metrics.sentiment.label === "negative" ? (
+                        <Frown className="w-5 h-5 text-red-400" />
+                      ) : (
+                        <Meh className="w-5 h-5 text-zinc-400" />
+                      )}
+                      <div>
+                        <p className={`text-lg font-bold capitalize ${
+                          metrics.sentiment.label === "positive"
+                            ? "text-emerald-400"
+                            : metrics.sentiment.label === "negative"
+                            ? "text-red-400"
+                            : "text-zinc-300"
+                        }`}>
+                          {metrics.sentiment.label}
+                        </p>
+                        <p className="text-[10px] text-zinc-500 uppercase">Sentiment</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             )}
 
@@ -663,6 +794,179 @@ export function StreamCoachPage() {
 
           {/* Metrics Tab */}
           <TabsContent value="metrics" className="space-y-4">
+            {/* Chat Activity Chart */}
+            {chatActivity.length > 0 && (
+              <Card className="bg-zinc-900/50 border-zinc-800">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm text-zinc-400 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-violet-400" />
+                    Chat Activity (Last 60 min)
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-zinc-500 hover:text-white h-7 px-2"
+                    onClick={fetchChatActivity}
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={chatActivity.map((d) => ({
+                          time: new Date(d.bucket).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                          messages: d.msg_count,
+                          chatters: d.unique_chatters,
+                        }))}
+                        margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient id="msgGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="chatterGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                        <XAxis
+                          dataKey="time"
+                          tick={{ fill: "#71717a", fontSize: 10 }}
+                          tickLine={false}
+                          axisLine={{ stroke: "#27272a" }}
+                        />
+                        <YAxis
+                          tick={{ fill: "#71717a", fontSize: 10 }}
+                          tickLine={false}
+                          axisLine={{ stroke: "#27272a" }}
+                        />
+                        <RechartsTooltip
+                          contentStyle={{
+                            backgroundColor: "#18181b",
+                            border: "1px solid #27272a",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                          }}
+                          labelStyle={{ color: "#a1a1aa" }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="messages"
+                          stroke="#8b5cf6"
+                          fill="url(#msgGradient)"
+                          strokeWidth={2}
+                          name="Messages"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="chatters"
+                          stroke="#10b981"
+                          fill="url(#chatterGradient)"
+                          strokeWidth={2}
+                          name="Unique Chatters"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex items-center justify-center gap-6 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-violet-500" />
+                      <span className="text-[10px] text-zinc-500">Messages</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <span className="text-[10px] text-zinc-500">Unique Chatters</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sentiment Breakdown */}
+            {metrics?.sentiment && metrics.sentiment.total > 0 && (
+              <Card className="bg-zinc-900/50 border-zinc-800">
+                <CardHeader>
+                  <CardTitle className="text-sm text-zinc-400 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-violet-400" />
+                    Chat Sentiment Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-400">Overall Mood</span>
+                      <Badge className={`capitalize ${
+                        metrics.sentiment.label === "positive"
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : metrics.sentiment.label === "negative"
+                          ? "bg-red-500/20 text-red-400"
+                          : "bg-zinc-700/50 text-zinc-400"
+                      }`}>
+                        {metrics.sentiment.label === "positive" && <SmilePlus className="w-3 h-3 mr-1" />}
+                        {metrics.sentiment.label === "negative" && <Frown className="w-3 h-3 mr-1" />}
+                        {metrics.sentiment.label === "neutral" && <Meh className="w-3 h-3 mr-1" />}
+                        {metrics.sentiment.label}
+                      </Badge>
+                    </div>
+                    <Separator className="bg-zinc-800" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-zinc-400">Sentiment Score</span>
+                      <span className={`text-sm font-bold ${
+                        metrics.sentiment.score > 0 ? "text-emerald-400" : metrics.sentiment.score < 0 ? "text-red-400" : "text-zinc-300"
+                      }`}>
+                        {metrics.sentiment.score > 0 ? "+" : ""}{metrics.sentiment.score}
+                      </span>
+                    </div>
+                    <Separator className="bg-zinc-800" />
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="text-center p-2 rounded-lg bg-emerald-500/5">
+                        <p className="text-lg font-bold text-emerald-400">{metrics.sentiment.positive}</p>
+                        <p className="text-[10px] text-zinc-500">Positive</p>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-zinc-800/30">
+                        <p className="text-lg font-bold text-zinc-300">
+                          {metrics.sentiment.total - metrics.sentiment.positive - metrics.sentiment.negative}
+                        </p>
+                        <p className="text-[10px] text-zinc-500">Neutral</p>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-red-500/5">
+                        <p className="text-lg font-bold text-red-400">{metrics.sentiment.negative}</p>
+                        <p className="text-[10px] text-zinc-500">Negative</p>
+                      </div>
+                    </div>
+                    {/* Sentiment bar */}
+                    <div className="h-2 rounded-full bg-zinc-800 overflow-hidden flex">
+                      {metrics.sentiment.positive > 0 && (
+                        <div
+                          className="h-full bg-emerald-500 transition-all"
+                          style={{ width: `${(metrics.sentiment.positive / metrics.sentiment.total) * 100}%` }}
+                        />
+                      )}
+                      <div
+                        className="h-full bg-zinc-600 transition-all"
+                        style={{
+                          width: `${((metrics.sentiment.total - metrics.sentiment.positive - metrics.sentiment.negative) / metrics.sentiment.total) * 100}%`,
+                        }}
+                      />
+                      {metrics.sentiment.negative > 0 && (
+                        <div
+                          className="h-full bg-red-500 transition-all"
+                          style={{ width: `${(metrics.sentiment.negative / metrics.sentiment.total) * 100}%` }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="bg-zinc-900/50 border-zinc-800">
                 <CardHeader>

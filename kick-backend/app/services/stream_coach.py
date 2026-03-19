@@ -91,6 +91,12 @@ async def analyze_stream(
     if peak_suggestion:
         suggestions.append(peak_suggestion)
 
+    # 7. Chat sentiment analysis
+    if settings.get("sentiment_alerts", True):
+        sentiment_suggestion = await _check_chat_sentiment(channel, session["started_at"])
+        if sentiment_suggestion:
+            suggestions.append(sentiment_suggestion)
+
     # Save new suggestions to DB
     saved_suggestions = []
     existing = await coach_repo.get_suggestions(session_id, include_dismissed=True)
@@ -98,7 +104,7 @@ async def analyze_stream(
 
     for s in suggestions:
         # Avoid duplicate suggestion types within a short window
-        if s["type"] not in existing_types or s["type"] in ("engagement", "viewer_change", "peak_moment"):
+        if s["type"] not in existing_types or s["type"] in ("engagement", "viewer_change", "peak_moment", "sentiment"):
             saved = await coach_repo.create_suggestion(
                 session_id=session_id,
                 channel=channel,
@@ -109,6 +115,9 @@ async def analyze_stream(
             )
             saved_suggestions.append(saved)
 
+    # Compute sentiment score for metrics
+    sentiment = await _compute_sentiment_score(channel, session["started_at"])
+
     metrics = {
         "viewer_count": viewer_count,
         "peak_viewers": peak,
@@ -117,6 +126,7 @@ async def analyze_stream(
         "stream_duration_minutes": _get_duration_minutes(session["started_at"]),
         "game": game,
         "snapshot_count": snapshot_count,
+        "sentiment": sentiment,
     }
 
     return {"suggestions": saved_suggestions, "metrics": metrics}
@@ -332,6 +342,114 @@ def _check_peak_moment(snapshots: list[dict], current_msg_count: int) -> dict | 
             "title": "Hype Moment Detected!",
             "message": "Chat is going wild right now! This could be a great clip-worthy moment. Keep the energy up and consider marking this timestamp for a highlight reel.",
         }
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Sentiment analysis
+# ---------------------------------------------------------------------------
+
+# Negative keywords commonly seen in toxic/negative chat
+_NEGATIVE_KEYWORDS = [
+    "trash", "garbage", "boring", "terrible", "awful", "worst",
+    "cringe", "dead stream", "dead chat", "leave", "unfollow",
+    "sucks", "bad", "hate", "toxic", "annoying", "stupid",
+    "dumb", "lame", "waste", "unwatchable", "yawn", "sleeper",
+    "ratio", "L stream", "dogwater", "mid",
+]
+
+_POSITIVE_KEYWORDS = [
+    "gg", "pog", "poggers", "hype", "lets go", "let's go",
+    "goat", "amazing", "incredible", "insane", "clutch",
+    "love", "great", "awesome", "fire", "W stream",
+    "based", "goated", "cracked", "nice", "well played",
+    "beautiful", "perfect", "legendary", "epic",
+]
+
+
+async def _get_recent_messages(channel: str, started_at: str, limit: int = 50) -> list[str]:
+    """Fetch recent chat messages for sentiment analysis."""
+    from app.services.db import get_conn
+    async with get_conn() as conn:
+        row = await conn.execute(
+            """SELECT message FROM chat_logs
+               WHERE channel = %s AND timestamp >= %s
+               ORDER BY timestamp DESC LIMIT %s""",
+            (channel, started_at, limit),
+        )
+        results = await row.fetchall()
+    return [r["message"] for r in results]
+
+
+def _score_sentiment(messages: list[str]) -> dict:
+    """Score sentiment of a batch of messages using keyword matching.
+
+    Returns a dict with score (-1.0 to 1.0), label, and counts.
+    """
+    if not messages:
+        return {"score": 0.0, "label": "neutral", "positive": 0, "negative": 0, "total": 0}
+
+    positive_count = 0
+    negative_count = 0
+
+    for msg in messages:
+        lower = msg.lower()
+        for kw in _NEGATIVE_KEYWORDS:
+            if kw in lower:
+                negative_count += 1
+                break
+        for kw in _POSITIVE_KEYWORDS:
+            if kw in lower:
+                positive_count += 1
+                break
+
+    total = len(messages)
+    pos_ratio = positive_count / total if total > 0 else 0
+    neg_ratio = negative_count / total if total > 0 else 0
+    score = round(pos_ratio - neg_ratio, 3)
+
+    if score > 0.1:
+        label = "positive"
+    elif score < -0.1:
+        label = "negative"
+    else:
+        label = "neutral"
+
+    return {
+        "score": score,
+        "label": label,
+        "positive": positive_count,
+        "negative": negative_count,
+        "total": total,
+    }
+
+
+async def _compute_sentiment_score(channel: str, started_at: str) -> dict:
+    """Compute current chat sentiment for metrics reporting."""
+    messages = await _get_recent_messages(channel, started_at, limit=50)
+    return _score_sentiment(messages)
+
+
+async def _check_chat_sentiment(channel: str, started_at: str) -> dict | None:
+    """Detect negative chat sentiment trends and generate coaching suggestion."""
+    messages = await _get_recent_messages(channel, started_at, limit=30)
+    if len(messages) < 5:
+        return None
+
+    sentiment = _score_sentiment(messages)
+
+    if sentiment["label"] == "negative" and sentiment["negative"] >= 3:
+        neg_pct = round(sentiment["negative"] / sentiment["total"] * 100)
+        return {
+            "type": "sentiment",
+            "priority": "warning",
+            "title": "Negative Chat Sentiment Detected",
+            "message": f"About {neg_pct}% of recent messages have negative sentiment. "
+                       "Consider addressing chat concerns, switching topics, or engaging "
+                       "positively to shift the mood. A quick interaction or fun moment can "
+                       "turn things around.",
+        }
+
     return None
 
 
