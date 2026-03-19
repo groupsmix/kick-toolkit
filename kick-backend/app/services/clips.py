@@ -5,7 +5,7 @@ Detects hype moments from chat data and generates AI captions for clips.
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import httpx
 

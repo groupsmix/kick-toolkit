@@ -1,6 +1,5 @@
 """Repository for Stream Intelligence Dashboard data access."""
 
-import json
 
 from app.services.db import get_conn, _generate_id, _now_iso
 

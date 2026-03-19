@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.dependencies import require_auth
 from app.models.schemas import ContentSegmentCreate, HeatmapSnapshot

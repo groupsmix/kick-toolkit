@@ -1,7 +1,6 @@
 """Repository for Creator Economy Marketplace data access."""
 
 import json
-from typing import Optional
 
 from app.services.db import get_conn, _generate_id, _now_iso
 

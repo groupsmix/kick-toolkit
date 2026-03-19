@@ -14,7 +14,6 @@ from app.models.schemas import (
     AutoVerifyRequest,
     AutoVerifyResult,
     BannedUser,
-    BehaviorProfile,
     ChallengeCheck,
     ChallengeResult,
     RiskModelStats,
