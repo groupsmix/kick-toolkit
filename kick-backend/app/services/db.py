@@ -876,6 +876,75 @@ CREATE TABLE IF NOT EXISTS highlight_markers (
     category TEXT NOT NULL DEFAULT 'hype',
     created_at TEXT NOT NULL
 );
+
+-- ========== Chat Polls & Voting ==========
+CREATE TABLE IF NOT EXISTS polls (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    title TEXT NOT NULL,
+    options JSONB NOT NULL DEFAULT '[]',
+    duration_seconds INT NOT NULL DEFAULT 300,
+    allow_multiple_votes BOOLEAN NOT NULL DEFAULT FALSE,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    closed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS poll_votes (
+    id TEXT PRIMARY KEY,
+    poll_id TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    option_index INT NOT NULL,
+    voted_at TEXT NOT NULL
+);
+
+-- ========== Predictions System ==========
+CREATE TABLE IF NOT EXISTS predictions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    title TEXT NOT NULL,
+    outcomes JSONB NOT NULL DEFAULT '[]',
+    lock_seconds INT NOT NULL DEFAULT 300,
+    status TEXT NOT NULL DEFAULT 'open',
+    winning_index INT,
+    created_at TEXT NOT NULL,
+    locked_at TEXT,
+    resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS prediction_bets (
+    id TEXT PRIMARY KEY,
+    prediction_id TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    outcome_index INT NOT NULL,
+    amount INT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    payout INT NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Alert Queue ==========
+CREATE TABLE IF NOT EXISTS alert_queue (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    alert_type TEXT NOT NULL,
+    data JSONB NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL,
+    displayed_at TEXT
+);
+
+-- ========== Multi-Language Chat Translation ==========
+CREATE TABLE IF NOT EXISTS translation_settings (
+    channel TEXT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    target_language TEXT NOT NULL DEFAULT 'en',
+    auto_translate BOOLEAN NOT NULL DEFAULT FALSE,
+    show_original BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -1328,5 +1397,75 @@ async def seed_demo_data():
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                 (*hl, now),
             )
+
+        # ========== Phase 2: Chat Polls ==========
+        poll1_id = _generate_id()
+        poll2_id = _generate_id()
+        await conn.execute(
+            """INSERT INTO polls (id, channel, title, options, duration_seconds, allow_multiple_votes, status, created_at, closed_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (poll1_id, channel, "What game should we play next?",
+             json.dumps(["Valorant", "Fortnite", "Minecraft", "Just Chatting"]),
+             300, False, "active", now, None),
+        )
+        await conn.execute(
+            """INSERT INTO polls (id, channel, title, options, duration_seconds, allow_multiple_votes, status, created_at, closed_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (poll2_id, channel, "Best stream moment this week?",
+             json.dumps(["Monday clutch", "Wednesday raid", "Friday subathon"]),
+             600, False, "closed", (base_time - timedelta(days=2)).isoformat(),
+             (base_time - timedelta(days=2) + timedelta(hours=1)).isoformat()),
+        )
+        poll_voters = ["viewer_andy", "sub_mike", "viewer_jenny", "mod_sarah", "new_viewer_1"]
+        for i, voter in enumerate(poll_voters):
+            await conn.execute(
+                """INSERT INTO poll_votes (id, poll_id, channel, username, option_index, voted_at)
+                   VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (_generate_id(), poll1_id, channel, voter, i % 4, now),
+            )
+        for i, voter in enumerate(poll_voters[:3]):
+            await conn.execute(
+                """INSERT INTO poll_votes (id, poll_id, channel, username, option_index, voted_at)
+                   VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (_generate_id(), poll2_id, channel, voter, i % 3,
+                 (base_time - timedelta(days=2)).isoformat()),
+            )
+
+        # ========== Phase 2: Predictions ==========
+        pred1_id = _generate_id()
+        pred2_id = _generate_id()
+        await conn.execute(
+            """INSERT INTO predictions (id, channel, title, outcomes, lock_seconds, status, winning_index, created_at, locked_at, resolved_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (pred1_id, channel, "Will we win the next ranked match?",
+             json.dumps(["Yes - EZ win", "No - tough lobby"]),
+             300, "open", None, now, None, None),
+        )
+        await conn.execute(
+            """INSERT INTO predictions (id, channel, title, outcomes, lock_seconds, status, winning_index, created_at, locked_at, resolved_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (pred2_id, channel, "How many kills in the next game?",
+             json.dumps(["0-5 kills", "6-10 kills", "11+ kills"]),
+             600, "resolved", 1, (base_time - timedelta(days=1)).isoformat(),
+             (base_time - timedelta(hours=23, minutes=30)).isoformat(),
+             (base_time - timedelta(hours=23)).isoformat()),
+        )
+        pred_bettors = [
+            ("viewer_andy", 0, 100), ("sub_mike", 0, 250),
+            ("mod_sarah", 1, 150), ("viewer_jenny", 0, 50),
+        ]
+        for username, outcome_idx, amount in pred_bettors:
+            await conn.execute(
+                """INSERT INTO prediction_bets (id, prediction_id, channel, username, outcome_index, amount, status, payout, created_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (_generate_id(), pred1_id, channel, username, outcome_idx, amount, "pending", 0, now),
+            )
+
+        # ========== Phase 2: Translation Settings ==========
+        await conn.execute(
+            """INSERT INTO translation_settings (channel, enabled, target_language, auto_translate, show_original, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (channel, True, "en", False, True, now),
+        )
 
         await conn.commit()

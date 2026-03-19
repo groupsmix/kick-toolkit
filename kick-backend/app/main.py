@@ -33,6 +33,9 @@ from app.routers.debrief import router as debrief_router
 from app.routers.discord_bot import router as discord_bot_router
 from app.routers.revenue import router as revenue_router
 from app.routers.highlights import router as highlights_router
+from app.routers.polls import router as polls_router
+from app.routers.predictions import router as predictions_router
+from app.routers.translation import router as translation_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -126,6 +129,9 @@ app.include_router(debrief_router)
 app.include_router(discord_bot_router)
 app.include_router(revenue_router)
 app.include_router(highlights_router)
+app.include_router(polls_router)
+app.include_router(predictions_router)
+app.include_router(translation_router)
 
 
 @app.get("/healthz")

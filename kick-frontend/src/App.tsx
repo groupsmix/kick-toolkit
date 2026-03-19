@@ -33,6 +33,10 @@ import { DebriefPage } from "@/pages/DebriefPage";
 import { DiscordBotPage } from "@/pages/DiscordBotPage";
 import { RevenuePage } from "@/pages/RevenuePage";
 import { HighlightsPage } from "@/pages/HighlightsPage";
+import { PollsPage } from "@/pages/PollsPage";
+import { PredictionsPage } from "@/pages/PredictionsPage";
+import { TranslationPage } from "@/pages/TranslationPage";
+import { WordCloudOverlay } from "@/pages/overlays/WordCloudOverlay";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -335,6 +339,36 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/polls"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PollsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/predictions"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <PredictionsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/translation"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <TranslationPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Public routes - no auth required */}
       <Route path="/streamer/:channel" element={<PublicProfilePage />} />
@@ -344,6 +378,7 @@ function AppRoutes() {
       <Route path="/overlay/alerts" element={<AlertOverlay />} />
       <Route path="/overlay/giveaway" element={<GiveawayOverlay />} />
       <Route path="/overlay/nowplaying" element={<NowPlayingOverlay />} />
+      <Route path="/overlay/wordcloud" element={<WordCloudOverlay />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
