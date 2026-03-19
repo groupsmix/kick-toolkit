@@ -26,6 +26,18 @@ async def get_stats() -> dict:
         row = await conn.execute("SELECT count(*) AS cnt FROM bot_commands")
         total_commands = (await row.fetchone())["cnt"]
 
+        row = await conn.execute("SELECT count(*) AS cnt FROM banned_users")
+        banned_users_count = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM whitelisted_users")
+        whitelisted_users_count = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM raid_events WHERE resolved = FALSE")
+        active_raids = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM user_challenges WHERE challenge_status = 'pending'")
+        pending_challenges = (await row.fetchone())["cnt"]
+
     moderation_rate = round(flagged_messages / max(total_messages, 1) * 100, 1)
 
     return {
@@ -37,4 +49,8 @@ async def get_stats() -> dict:
         "flagged_accounts": flagged_accounts_count,
         "total_commands": total_commands,
         "moderation_rate": moderation_rate,
+        "banned_users": banned_users_count,
+        "whitelisted_users": whitelisted_users_count,
+        "active_raids": active_raids,
+        "pending_challenges": pending_challenges,
     }

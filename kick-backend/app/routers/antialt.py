@@ -1,4 +1,4 @@
-"""Anti-alt detection router."""
+"""Anti-alt detection router (enhanced)."""
 
 import logging
 from datetime import datetime, timezone
@@ -7,8 +7,27 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
-from app.models.schemas import AltCheckRequest, AltCheckResult, AntiAltSettings
+from app.models.schemas import (
+    AltCheckRequest,
+    AltCheckResult,
+    AntiAltSettings,
+    AutoVerifyRequest,
+    AutoVerifyResult,
+    BannedUser,
+    BehaviorProfile,
+    ChallengeCheck,
+    ChallengeResult,
+    RiskModelStats,
+    WhitelistedUser,
+)
 from app.repositories import antialt as antialt_repo
+from app.repositories import banned as banned_repo
+from app.repositories import whitelist as whitelist_repo
+from app.services import auto_verify as verify_svc
+from app.services import behavior_analysis as behavior_svc
+from app.services import challenge as challenge_svc
+from app.services import name_similarity as name_svc
+from app.services.risk_scoring import risk_engine
 
 KICK_API_BASE = "https://api.kick.com/public/v1"
 
@@ -98,9 +117,20 @@ async def check_user(req: AltCheckRequest, _session: dict = Depends(require_auth
         flags.append("Low follower count")
         risk_score += 10
 
-    sus_patterns = ["xx", "alt", "new", "temp", "fake", "bot", "spam", "test"]
-    if any(p in username for p in sus_patterns):
-        flags.append("Username pattern match")
+    # Enhanced name similarity check
+    banned_names = await banned_repo.get_banned_usernames(req.channel)
+    similar_names: list[str] = []
+    if banned_names:
+        similar = name_svc.find_similar_names(username, banned_names)
+        for name, score in similar[:5]:
+            similar_names.append(name)
+            flags.append(f"Name similar to banned '{name}' ({score:.0%})")
+            risk_score += 15 * score
+
+    # Pattern check
+    pattern_flags = name_svc.get_pattern_flags(username)
+    flags.extend(pattern_flags)
+    if pattern_flags:
         risk_score += 15
 
     if not is_following:
@@ -134,7 +164,7 @@ async def check_user(req: AltCheckRequest, _session: dict = Depends(require_auth
         account_age_days=account_age_days,
         follower_count=follower_count,
         is_following=is_following,
-        similar_names=[],
+        similar_names=similar_names,
     )
 
 
@@ -148,11 +178,7 @@ async def get_flagged(_session: dict = Depends(require_auth)) -> list[AltCheckRe
 async def get_settings(_session: dict = Depends(require_auth)) -> dict:
     settings = await antialt_repo.get_settings()
     if not settings:
-        return {
-            "enabled": True, "min_account_age_days": 7, "auto_ban_threshold": 80.0,
-            "auto_timeout_threshold": 50.0, "check_name_similarity": True,
-            "check_follow_status": True, "whitelisted_users": [],
-        }
+        return AntiAltSettings().model_dump()
     result = dict(settings)
     result.pop("id", None)
     return result
@@ -160,11 +186,7 @@ async def get_settings(_session: dict = Depends(require_auth)) -> dict:
 
 @router.put("/settings")
 async def update_settings(settings: AntiAltSettings, _session: dict = Depends(require_auth)) -> dict:
-    await antialt_repo.upsert_settings(
-        settings.enabled, settings.min_account_age_days, settings.auto_ban_threshold,
-        settings.auto_timeout_threshold, settings.check_name_similarity,
-        settings.check_follow_status, settings.whitelisted_users,
-    )
+    await antialt_repo.upsert_settings(settings)
     logger.info("Anti-alt settings updated")
     return settings.model_dump()
 
@@ -176,8 +198,163 @@ async def remove_flagged(username: str, _session: dict = Depends(require_auth)) 
     return {"status": "removed"}
 
 
+# ========== Auto-Verify ==========
+
+
+@router.post("/auto-verify")
+async def auto_verify_user(
+    req: AutoVerifyRequest,
+    _session: dict = Depends(require_auth),
+) -> AutoVerifyResult:
+    """Auto-verify a user on first chat message."""
+    access_token = _session.get("access_token", "")
+
+    account_age_days = 0
+    follower_count = 0
+    is_following = False
+    if access_token:
+        try:
+            account_age_days, follower_count, is_following = await _fetch_kick_user_data(
+                req.username, access_token,
+            )
+        except Exception:
+            logger.warning("Failed to fetch Kick data for %s", req.username)
+
+    result = await verify_svc.auto_verify(
+        username=req.username,
+        channel=req.channel,
+        message=req.message,
+        account_age_days=account_age_days,
+        follower_count=follower_count,
+        is_following=is_following,
+        client_ip=req.client_ip,
+        user_agent=req.user_agent,
+        fingerprint_data=req.fingerprint,
+    )
+
+    return AutoVerifyResult(
+        action=result["action"],
+        risk_score=result["risk_score"],
+        flags=result.get("flags", []),
+        challenge_type=result.get("challenge_type"),
+        challenge_message=result.get("challenge_message"),
+    )
+
+
+# ========== Banned Users ==========
+
+
+@router.get("/banned-users")
+async def list_banned_users(channel: str = "", _session: dict = Depends(require_auth)) -> list[BannedUser]:
+    rows = await banned_repo.list_banned(channel)
+    return [BannedUser(**r) for r in rows]
+
+
+@router.post("/banned-users")
+async def add_banned_user(user: BannedUser, _session: dict = Depends(require_auth)) -> BannedUser:
+    result = await banned_repo.add_banned(
+        user.username, user.channel, user.ban_reason or "", user.ban_source,
+    )
+    logger.info("User %s added to ban list for channel=%s", user.username, user.channel)
+    return BannedUser(**result)
+
+
+@router.delete("/banned-users/{username}")
+async def remove_banned_user(username: str, channel: str = "", _session: dict = Depends(require_auth)) -> dict:
+    await banned_repo.remove_banned(username, channel)
+    logger.info("User %s removed from ban list", username)
+    return {"status": "removed"}
+
+
+# ========== Whitelist ==========
+
+
+@router.get("/whitelist")
+async def list_whitelisted(channel: str = "", _session: dict = Depends(require_auth)) -> list[WhitelistedUser]:
+    rows = await whitelist_repo.list_whitelisted(channel)
+    return [WhitelistedUser(**r) for r in rows]
+
+
 @router.post("/whitelist/{username}")
-async def whitelist_user(username: str, _session: dict = Depends(require_auth)) -> dict:
+async def whitelist_user(
+    username: str,
+    channel: str = "",
+    _session: dict = Depends(require_auth),
+) -> dict:
+    await whitelist_repo.add_whitelisted(username, channel, added_by="streamer", reason="Manual whitelist")
     await antialt_repo.whitelist_user(username)
     logger.info("User %s whitelisted", username)
     return {"status": "whitelisted", "user": username}
+
+
+@router.delete("/whitelist/{username}")
+async def remove_whitelisted(
+    username: str,
+    channel: str = "",
+    _session: dict = Depends(require_auth),
+) -> dict:
+    await whitelist_repo.remove_whitelisted(username, channel)
+    logger.info("User %s removed from whitelist", username)
+    return {"status": "removed"}
+
+
+# ========== Challenges ==========
+
+
+@router.post("/challenge/check")
+async def check_challenge(req: ChallengeCheck, _session: dict = Depends(require_auth)) -> dict:
+    result = await challenge_svc.check_challenge(req.username, req.channel)
+    if not result:
+        return {"status": "no_challenge", "completed": True}
+    return result
+
+
+@router.post("/challenge/verify")
+async def verify_challenge(req: ChallengeCheck, _session: dict = Depends(require_auth)) -> dict:
+    access_token = _session.get("access_token", "")
+    is_following = False
+    if access_token:
+        try:
+            _, _, is_following = await _fetch_kick_user_data(req.username, access_token)
+        except Exception:
+            pass
+
+    result = await challenge_svc.verify_challenge(req.username, req.channel, is_following)
+    return result
+
+
+@router.get("/challenges")
+async def list_challenges(channel: str = "", _session: dict = Depends(require_auth)) -> list[ChallengeResult]:
+    rows = await challenge_svc.list_active_challenges(channel or None)
+    return [ChallengeResult(**r) for r in rows]
+
+
+# ========== Behavior Profiles ==========
+
+
+@router.get("/behavior/{username}")
+async def get_behavior_profile(
+    username: str,
+    channel: str = "",
+    _session: dict = Depends(require_auth),
+) -> dict:
+    profile = await behavior_svc.get_profile(username, channel)
+    if not profile:
+        return {"username": username, "channel": channel, "message_count": 0}
+    return profile
+
+
+# ========== Risk Model ==========
+
+
+@router.get("/risk-model/stats")
+async def get_risk_model_stats(channel: str = "", _session: dict = Depends(require_auth)) -> RiskModelStats:
+    stats = await risk_engine.get_model_stats(channel)
+    return RiskModelStats(**stats)
+
+
+@router.post("/risk-model/retrain")
+async def retrain_risk_model(channel: str = "", _session: dict = Depends(require_auth)) -> dict:
+    result = await risk_engine.retrain(channel)
+    logger.info("Risk model retrain requested for channel=%s: %s", channel, result.get("status"))
+    return result

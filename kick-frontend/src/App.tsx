@@ -9,6 +9,7 @@ import { BotPage } from "@/pages/BotPage";
 import { ChatLogsPage } from "@/pages/ChatLogsPage";
 import { GiveawayPage } from "@/pages/GiveawayPage";
 import { AntiAltPage } from "@/pages/AntiAltPage";
+import { AntiCheatPage } from "@/pages/AntiCheatPage";
 import { TournamentPage } from "@/pages/TournamentPage";
 import { IdeasPage } from "@/pages/IdeasPage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -118,6 +119,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <AntiAltPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/anticheat"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <AntiCheatPage />
             </AppLayout>
           </ProtectedRoute>
         }
