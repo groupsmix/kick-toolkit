@@ -1,47 +1,100 @@
 """Anti-alt detection router."""
 
 import logging
-import random
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
-from app.models.schemas import AltCheckRequest, AntiAltSettings
+from app.models.schemas import AltCheckRequest, AltCheckResult, AntiAltSettings
 from app.repositories import antialt as antialt_repo
+
+KICK_API_BASE = "https://api.kick.com/public/v1"
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/antialt", tags=["antialt"])
 
 
+async def _fetch_kick_user_data(
+    username: str, access_token: str,
+) -> tuple[int, int, bool]:
+    """Fetch real account data from Kick API.
+
+    Returns (account_age_days, follower_count, is_following).
+    """
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        # Get channel info by slug to retrieve follower count and creation date
+        channel_resp = await client.get(
+            f"{KICK_API_BASE}/channels",
+            params={"slug": username},
+            headers=headers,
+        )
+
+        account_age_days = 0
+        follower_count = 0
+        is_following = False
+
+        if channel_resp.status_code == 200:
+            channel_data = channel_resp.json()
+            channels = channel_data.get("data", [])
+            if channels:
+                channel = channels[0] if isinstance(channels, list) else channels
+                follower_count = channel.get("followers_count", 0)
+
+                created_at = channel.get("created_at")
+                if created_at:
+                    try:
+                        created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                        account_age_days = (datetime.now(timezone.utc) - created_dt).days
+                    except (ValueError, TypeError):
+                        pass
+
+                is_following = channel.get("is_following", False)
+
+    return account_age_days, follower_count, is_following
+
+
 @router.post("/check")
-async def check_user(req: AltCheckRequest, _session: dict = Depends(require_auth)) -> dict:
-    """Simulate alt account detection analysis."""
+async def check_user(req: AltCheckRequest, _session: dict = Depends(require_auth)) -> AltCheckResult:
+    """Analyze a user for alt account indicators using real Kick API data."""
     username = req.username.lower()
 
     existing = await antialt_repo.get_flagged_account(username)
     if existing:
-        return existing
+        return AltCheckResult(**existing)
+
+    access_token = _session.get("access_token", "")
+    if not access_token:
+        raise HTTPException(
+            status_code=401,
+            detail="No Kick access token available. Please re-authenticate.",
+        )
+
+    account_age_days, follower_count, is_following = await _fetch_kick_user_data(
+        username, access_token,
+    )
 
     flags: list[str] = []
     risk_score = 0.0
 
-    fake_age = random.randint(0, 365)
-    if fake_age < 1:
+    if account_age_days < 1:
         flags.append("Account age < 1 day")
         risk_score += 30
-    elif fake_age < 7:
+    elif account_age_days < 7:
         flags.append("Account age < 7 days")
         risk_score += 20
-    elif fake_age < 30:
+    elif account_age_days < 30:
         flags.append("Account age < 30 days")
         risk_score += 10
 
-    fake_followers = random.randint(0, 500)
-    if fake_followers == 0:
+    if follower_count == 0:
         flags.append("No followers")
         risk_score += 20
-    elif fake_followers < 5:
+    elif follower_count < 5:
         flags.append("Low follower count")
         risk_score += 10
 
@@ -50,8 +103,8 @@ async def check_user(req: AltCheckRequest, _session: dict = Depends(require_auth
         flags.append("Username pattern match")
         risk_score += 15
 
-    if random.random() > 0.7:
-        flags.append("Low engagement")
+    if not is_following:
+        flags.append("Not following channel")
         risk_score += 10
 
     risk_score = min(risk_score, 100)
@@ -65,33 +118,30 @@ async def check_user(req: AltCheckRequest, _session: dict = Depends(require_auth
     else:
         risk_level = "low"
 
-    is_following = random.choice([True, False])
-
-    result = {
-        "username": req.username,
-        "risk_score": risk_score,
-        "risk_level": risk_level,
-        "flags": flags,
-        "account_age_days": fake_age,
-        "follower_count": fake_followers,
-        "is_following": is_following,
-        "similar_names": [],
-    }
-
     threshold = await antialt_repo.get_timeout_threshold()
     if risk_score >= threshold:
         await antialt_repo.insert_flagged_account(
             req.username, risk_score, risk_level, flags,
-            fake_age, fake_followers, is_following,
+            account_age_days, follower_count, is_following,
         )
         logger.info("User %s flagged with risk_score=%.1f", req.username, risk_score)
 
-    return result
+    return AltCheckResult(
+        username=req.username,
+        risk_score=risk_score,
+        risk_level=risk_level,
+        flags=flags,
+        account_age_days=account_age_days,
+        follower_count=follower_count,
+        is_following=is_following,
+        similar_names=[],
+    )
 
 
 @router.get("/flagged")
-async def get_flagged(_session: dict = Depends(require_auth)) -> list[dict]:
-    return await antialt_repo.list_flagged()
+async def get_flagged(_session: dict = Depends(require_auth)) -> list[AltCheckResult]:
+    rows = await antialt_repo.list_flagged()
+    return [AltCheckResult(**row) for row in rows]
 
 
 @router.get("/settings")

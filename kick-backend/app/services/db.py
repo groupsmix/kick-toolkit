@@ -194,8 +194,14 @@ async def create_tables():
         await conn.commit()
 
 
+DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() in ("true", "1", "yes")
+
+
 async def seed_demo_data():
-    """Populate demo data if the database is empty."""
+    """Populate demo data when DEMO_MODE is enabled and the database is empty."""
+    if not DEMO_MODE:
+        return
+
     async with get_conn() as conn:
         row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs")
         result = await row.fetchone()
