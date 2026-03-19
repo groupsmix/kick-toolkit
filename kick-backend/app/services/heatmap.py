@@ -6,7 +6,6 @@ Computes heatmap overviews, insights, and viewer attention analytics.
 import logging
 
 from app.repositories import heatmap as heatmap_repo
-from app.services.db import get_conn
 
 logger = logging.getLogger(__name__)
 

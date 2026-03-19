@@ -1,6 +1,5 @@
 """Repository for loyalty points, rewards, and redemptions."""
 
-import json
 from typing import Optional
 
 from app.services.db import get_conn, _generate_id, _now_iso

@@ -22,7 +22,7 @@ build/
 Thumbs.db
 
 # Poetry
-*.lock
+poetry.lock
 
 # Misc
 *.log

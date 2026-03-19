@@ -1,10 +1,10 @@
 import logging
 import os
 import time
-from collections import defaultdict
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.auth import router as auth_router
@@ -50,10 +50,11 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Simple in-memory rate limiter
+# Simple in-memory rate limiter (bounded LRU to prevent memory leaks)
 # ---------------------------------------------------------------------------
 
-_rate_store: dict[str, list[float]] = defaultdict(list)
+_RATE_STORE_MAX_KEYS = 10_000
+_rate_store: OrderedDict[str, list[float]] = OrderedDict()
 RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX = 60     # requests per window
 
@@ -62,17 +63,24 @@ async def _rate_limit(request: Request) -> None:
     """Check rate limit per client IP. Raises 429 if exceeded."""
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
-    timestamps = _rate_store[client_ip]
+    timestamps = _rate_store.get(client_ip, [])
     # Remove expired entries
-    _rate_store[client_ip] = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
-    if len(_rate_store[client_ip]) >= RATE_LIMIT_MAX:
+    timestamps = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
+    if len(timestamps) >= RATE_LIMIT_MAX:
+        _rate_store[client_ip] = timestamps
         raise HTTPException(status_code=429, detail="Too many requests")
-    _rate_store[client_ip].append(now)
+    timestamps.append(now)
+    _rate_store[client_ip] = timestamps
+    # Move to end (most-recently-used)
+    _rate_store.move_to_end(client_ip)
+    # Evict oldest entries when store exceeds max size
+    while len(_rate_store) > _RATE_STORE_MAX_KEYS:
+        _rate_store.popitem(last=False)
 
 
 ALLOWED_ORIGINS = os.environ.get(
     "ALLOWED_ORIGINS",
-    "https://kick-toolkit.pages.dev,https://api.zidni.store",
+    "http://localhost:5173",
 ).split(",")
 
 

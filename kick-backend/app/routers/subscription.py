@@ -2,14 +2,12 @@
 
 import json
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.dependencies import require_auth
 from app.repositories import subscription as sub_repo
 from app.services import lemonsqueezy as lemon
-from app.services.db import _now_iso
 
 logger = logging.getLogger(__name__)
 

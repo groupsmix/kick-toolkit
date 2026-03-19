@@ -3,13 +3,13 @@
 import json
 import logging
 
-from fastapi import APIRouter, Response, HTTPException
+from fastapi import APIRouter, Depends, Response, HTTPException
 from fastapi.responses import RedirectResponse
 
+from app.dependencies import require_auth
 from app.services.kick_auth import (
     create_auth_url,
     exchange_code,
-    get_session,
     refresh_session,
     revoke_session,
     FRONTEND_URL,
@@ -44,12 +44,8 @@ async def callback(code: str, state: str, response: Response):
 
 
 @router.get("/me")
-async def me(session_id: str):
-    """Get current user info from session."""
-    session = await get_session(session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
+async def me(session: dict = Depends(require_auth)):
+    """Get current user info from session (uses Authorization header)."""
     user_data = session.get("user_data", {})
     # Guard against double-serialised JSON (stored as string instead of dict)
     if isinstance(user_data, str):
@@ -65,8 +61,9 @@ async def me(session_id: str):
 
 
 @router.post("/refresh")
-async def refresh(session_id: str):
-    """Refresh the access token."""
+async def refresh(session: dict = Depends(require_auth)):
+    """Refresh the access token (uses Authorization header)."""
+    session_id = session["session_id"]
     result = await refresh_session(session_id)
     if not result:
         raise HTTPException(status_code=401, detail="Could not refresh token")
@@ -74,8 +71,9 @@ async def refresh(session_id: str):
 
 
 @router.post("/logout")
-async def logout(session_id: str):
-    """Revoke tokens and clear session."""
+async def logout(session: dict = Depends(require_auth)):
+    """Revoke tokens and clear session (uses Authorization header)."""
+    session_id = session["session_id"]
     success = await revoke_session(session_id)
     if not success:
         raise HTTPException(status_code=400, detail="Logout failed")

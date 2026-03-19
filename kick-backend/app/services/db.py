@@ -314,7 +314,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_in INT,
     token_type TEXT,
     scope TEXT,
-    user_data JSONB NOT NULL DEFAULT '{}'
+    user_data JSONB NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT '',
+    expires_at TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS pending_auth (

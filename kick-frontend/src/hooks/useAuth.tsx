@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    api<{ user: KickUser }>(`/api/auth/me?session_id=${sessionId}`)
+    api<{ user: KickUser }>("/api/auth/me")
       .then((data) => {
         setUser(data.user);
       })
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sessionId = localStorage.getItem("kick_session_id");
     if (sessionId) {
       try {
-        await api(`/api/auth/logout?session_id=${sessionId}`, { method: "POST" });
+        await api("/api/auth/logout", { method: "POST" });
       } catch {
         // Ignore errors during logout
       }

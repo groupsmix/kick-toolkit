@@ -7,11 +7,14 @@ import logging
 import os
 import secrets
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
 
 from app.services.db import get_conn
+
+SESSION_LIFETIME_HOURS = int(os.environ.get("SESSION_LIFETIME_HOURS", "168"))  # 7 days
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +25,8 @@ KICK_USER_URL = "https://api.kick.com/public/v1/users"
 
 KICK_CLIENT_ID = os.environ.get("KICK_CLIENT_ID", "")
 KICK_CLIENT_SECRET = os.environ.get("KICK_CLIENT_SECRET", "")
-KICK_REDIRECT_URI = os.environ.get("KICK_REDIRECT_URI", "https://kick-toolkit.pages.dev/auth/callback")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kick-toolkit.pages.dev")
+KICK_REDIRECT_URI = os.environ.get("KICK_REDIRECT_URI", "http://localhost:5173/auth/callback")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 KICK_SCOPES = "user:read channel:read chat:write events:subscribe moderation:manage chat:moderate"
 
@@ -117,20 +120,25 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
         else:
             logger.warning("User info fetch failed: status=%s", user_response.status_code)
 
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(hours=SESSION_LIFETIME_HOURS)
+
     async with get_conn() as conn:
         await conn.execute(
-            """INSERT INTO sessions (session_id, access_token, refresh_token, expires_in, token_type, scope, user_data)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """INSERT INTO sessions (session_id, access_token, refresh_token, expires_in, token_type, scope, user_data, created_at, expires_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (session_id) DO UPDATE SET
                    access_token = EXCLUDED.access_token,
                    refresh_token = EXCLUDED.refresh_token,
                    expires_in = EXCLUDED.expires_in,
                    token_type = EXCLUDED.token_type,
                    scope = EXCLUDED.scope,
-                   user_data = EXCLUDED.user_data""",
+                   user_data = EXCLUDED.user_data,
+                   expires_at = EXCLUDED.expires_at""",
             (session_id, token_data.get("access_token"), token_data.get("refresh_token"),
              token_data.get("expires_in"), token_data.get("token_type"),
-             token_data.get("scope"), json.dumps(user_data)),
+             token_data.get("scope"), json.dumps(user_data),
+             now.isoformat(), expires_at.isoformat()),
         )
         await conn.commit()
 
