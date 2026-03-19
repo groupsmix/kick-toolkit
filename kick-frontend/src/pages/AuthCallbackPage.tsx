@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Zap } from "lucide-react";
 
-interface AuthCallbackPageProps {
-  onComplete: () => void;
-}
-
-export function AuthCallbackPage({ onComplete }: AuthCallbackPageProps) {
+export function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -17,9 +15,8 @@ export function AuthCallbackPage({ onComplete }: AuthCallbackPageProps) {
     // Case 1: Redirected back from backend with session_id
     if (sessionId) {
       localStorage.setItem("kick_session_id", sessionId);
-      // Clean URL and reload to trigger auth check
-      window.history.replaceState({}, document.title, "/");
-      onComplete();
+      navigate("/", { replace: true });
+      window.location.reload();
       return;
     }
 
@@ -32,7 +29,7 @@ export function AuthCallbackPage({ onComplete }: AuthCallbackPageProps) {
     }
 
     setError("Invalid callback — missing authorization code.");
-  }, [onComplete]);
+  }, [navigate]);
 
   if (error) {
     return (
@@ -44,10 +41,7 @@ export function AuthCallbackPage({ onComplete }: AuthCallbackPageProps) {
           <h2 className="text-xl font-bold text-white mb-2">Authentication Failed</h2>
           <p className="text-sm text-zinc-400 mb-4">{error}</p>
           <button
-            onClick={() => {
-              window.history.replaceState({}, document.title, "/");
-              window.location.reload();
-            }}
+            onClick={() => navigate("/", { replace: true })}
             className="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-medium rounded-lg text-sm transition-colors"
           >
             Try Again

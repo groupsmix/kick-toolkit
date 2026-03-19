@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   Bot,
   Plus,
@@ -55,9 +56,20 @@ export function BotPage() {
   const [modResult, setModResult] = useState<ModerationResult | null>(null);
   const [showAddCmd, setShowAddCmd] = useState(false);
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    api<BotCommand[]>(`/api/bot/commands/${CHANNEL}`).then(setCommands);
-    api<ModRule[]>(`/api/moderation/rules/${CHANNEL}`).then(setModRules);
+    setLoading(true);
+    Promise.all([
+      api<BotCommand[]>(`/api/bot/commands/${CHANNEL}`).then(setCommands),
+      api<ModRule[]>(`/api/moderation/rules/${CHANNEL}`).then(setModRules),
+    ])
+      .catch((err) => {
+        setError(err.message || "Failed to load bot data");
+        toast.error("Failed to load bot data");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const addCommand = async () => {
@@ -69,11 +81,17 @@ export function BotPage() {
     setCommands([...commands, cmd]);
     setNewCmd({ name: "", response: "", cooldown: 5, mod_only: false });
     setShowAddCmd(false);
+    toast.success(`Command !${cmd.name} added`);
   };
 
   const deleteCommand = async (name: string) => {
-    await api(`/api/bot/commands/${CHANNEL}/${name}`, { method: "DELETE" });
-    setCommands(commands.filter((c) => c.name !== name));
+    try {
+      await api(`/api/bot/commands/${CHANNEL}/${name}`, { method: "DELETE" });
+      setCommands(commands.filter((c) => c.name !== name));
+      toast.success(`Command !${name} deleted`);
+    } catch {
+      toast.error("Failed to delete command");
+    }
   };
 
   const toggleRule = async (rule: ModRule) => {
@@ -82,6 +100,7 @@ export function BotPage() {
       body: JSON.stringify({ ...rule, enabled: !rule.enabled }),
     });
     setModRules(modRules.map((r) => (r.id === rule.id ? updated : r)));
+    toast.success(`Rule "${rule.name}" ${updated.enabled ? "enabled" : "disabled"}`);
   };
 
   const testModeration = async () => {
@@ -105,6 +124,25 @@ export function BotPage() {
     if (a === "delete") return "text-amber-400";
     return "text-blue-400";
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

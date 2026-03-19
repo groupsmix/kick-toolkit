@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   Search,
   AlertTriangle,
@@ -43,21 +44,35 @@ export function ChatLogsPage() {
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchLogs = async () => {
-    const params = new URLSearchParams({ channel: CHANNEL });
-    if (search) params.set("search", search);
-    if (flaggedOnly) params.set("flagged_only", "true");
-    if (selectedUser) params.set("username", selectedUser);
+    try {
+      const params = new URLSearchParams({ channel: CHANNEL });
+      if (search) params.set("search", search);
+      if (flaggedOnly) params.set("flagged_only", "true");
+      if (selectedUser) params.set("username", selectedUser);
 
-    const data = await api<{ logs: ChatLog[]; total: number }>(`/api/chatlogs?${params}`);
-    setLogs(data.logs);
-    setTotal(data.total);
+      const data = await api<{ logs: ChatLog[]; total: number }>(`/api/chatlogs?${params}`);
+      setLogs(data.logs);
+      setTotal(data.total);
+      setError(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load chat logs";
+      setError(msg);
+      toast.error(msg);
+    }
   };
 
   useEffect(() => {
-    fetchLogs();
-    api<ChatStats>(`/api/chatlogs/stats/${CHANNEL}`).then(setStats);
+    setLoading(true);
+    Promise.all([
+      fetchLogs(),
+      api<ChatStats>(`/api/chatlogs/stats/${CHANNEL}`).then(setStats),
+    ])
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -68,6 +83,25 @@ export function ChatLogsPage() {
     const date = new Date(ts);
     return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error && logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

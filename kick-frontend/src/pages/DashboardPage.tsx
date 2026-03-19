@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   MessageSquare,
   ShieldAlert,
@@ -26,15 +28,40 @@ interface DashboardStats {
 
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = () => {
+    setLoading(true);
+    setError(null);
+    api<DashboardStats>("/api/dashboard/stats")
+      .then(setStats)
+      .catch((err) => {
+        setError(err.message || "Failed to load dashboard stats");
+        toast.error("Failed to load dashboard stats");
+      })
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    api<DashboardStats>("/api/dashboard/stats").then(setStats);
+    fetchStats();
   }, []);
 
-  if (!stats) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error || "Failed to load data"}</p>
+        <Button onClick={fetchStats} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
       </div>
     );
   }

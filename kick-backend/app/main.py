@@ -1,7 +1,9 @@
 import os
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.auth import router as auth_router
@@ -11,7 +13,29 @@ from app.routers.giveaway import router as giveaway_router
 from app.routers.antialt import router as antialt_router
 from app.routers.tournament import router as tournament_router
 from app.routers.ideas import router as ideas_router
+from app.dependencies import require_auth
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data, get_conn
+
+
+# ---------------------------------------------------------------------------
+# Simple in-memory rate limiter
+# ---------------------------------------------------------------------------
+
+_rate_store: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX = 60     # requests per window
+
+
+async def _rate_limit(request: Request) -> None:
+    """Check rate limit per client IP. Raises 429 if exceeded."""
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    timestamps = _rate_store[client_ip]
+    # Remove expired entries
+    _rate_store[client_ip] = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
+    if len(_rate_store[client_ip]) >= RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    _rate_store[client_ip].append(now)
 
 
 ALLOWED_ORIGINS = os.environ.get(
@@ -29,7 +53,12 @@ async def lifespan(application: FastAPI):
     await close_pool()
 
 
-app = FastAPI(title="Kick Toolkit API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Kick Toolkit API",
+    version="1.0.0",
+    lifespan=lifespan,
+    dependencies=[Depends(_rate_limit)],
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,7 +85,7 @@ async def healthz():
 
 
 @app.get("/api/dashboard/stats")
-async def dashboard_stats():
+async def dashboard_stats(_session: dict = Depends(require_auth)):
     async with get_conn() as conn:
         row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs")
         total_messages = (await row.fetchone())["cnt"]
