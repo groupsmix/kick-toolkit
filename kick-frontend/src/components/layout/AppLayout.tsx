@@ -16,6 +16,7 @@ const PAGE_CONFIG: Record<string, { title: string; subtitle: string }> = {
   "/antialt": { title: "Anti-Alt Detection", subtitle: "Detect and manage alt accounts" },
   "/tournament": { title: "Tournament Organizer", subtitle: "Create brackets and manage tournaments" },
   "/ideas": { title: "Giveaway Ideas", subtitle: "Get inspiration for your next giveaway" },
+  "/coach": { title: "AI Stream Coach", subtitle: "Real-time coaching to improve your stream" },
 };
 
 interface AppLayoutProps {
