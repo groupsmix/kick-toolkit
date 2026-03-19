@@ -482,3 +482,200 @@ class CoachAnalysisResult(BaseModel):
 class StreamSessionCreate(BaseModel):
     channel: str
     game: str = ""
+
+
+# ========== AI Clip Pipeline ==========
+class HypeMoment(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    session_id: Optional[str] = None
+    timestamp_start: str = ""
+    timestamp_end: str = ""
+    intensity: float = 0.0
+    trigger_type: str = "chat_spike"
+    message_count: int = 0
+    peak_rate: float = 0.0
+    sample_messages: list[str] = []
+    status: str = "detected"
+    created_at: Optional[str] = None
+
+
+class GeneratedClip(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    hype_moment_id: Optional[str] = None
+    title: str = ""
+    description: str = ""
+    caption: str = ""
+    file_path: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    duration_seconds: float = 0.0
+    status: str = "pending"
+    platform_specs: dict = {}
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class ClipCreate(BaseModel):
+    channel: str
+    hype_moment_id: Optional[str] = None
+    title: str = ""
+    description: str = ""
+    duration_seconds: float = 0.0
+
+
+class ClipPost(BaseModel):
+    id: Optional[str] = None
+    clip_id: str
+    platform: str  # "tiktok", "youtube", "instagram"
+    platform_post_id: Optional[str] = None
+    post_url: Optional[str] = None
+    status: str = "pending"
+    caption: str = ""
+    error_message: Optional[str] = None
+    posted_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class ClipPostRequest(BaseModel):
+    platform: str  # "tiktok", "youtube", "instagram"
+    caption: str = ""
+
+
+class ClipCaptionRequest(BaseModel):
+    style: str = "engaging"  # "engaging", "funny", "informative", "trending"
+
+
+# ========== Viewer Heatmap ==========
+class ViewerSession(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    stream_session_id: Optional[str] = None
+    username: str
+    joined_at: str = ""
+    left_at: Optional[str] = None
+    duration_seconds: int = 0
+    messages_sent: int = 0
+
+
+class ContentSegment(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    stream_session_id: str
+    label: str
+    category: str = "general"
+    started_at: str = ""
+    ended_at: Optional[str] = None
+    viewer_count_start: int = 0
+    viewer_count_end: int = 0
+    avg_viewers: float = 0.0
+    retention_rate: float = 0.0
+    chat_activity: int = 0
+
+
+class ContentSegmentCreate(BaseModel):
+    label: str
+    category: str = "general"
+    started_at: str = ""
+    ended_at: Optional[str] = None
+    viewer_count_start: int = 0
+    viewer_count_end: int = 0
+
+
+class HeatmapSnapshot(BaseModel):
+    channel: str
+    stream_session_id: str
+    minute_offset: int = 0
+    viewer_count: int = 0
+    message_count: int = 0
+    unique_chatters: int = 0
+    category: str = ""
+
+
+class HeatmapOverview(BaseModel):
+    channel: str
+    total_sessions: int = 0
+    avg_session_duration: float = 0.0
+    avg_retention_rate: float = 0.0
+    peak_viewer_minute: int = 0
+    best_category: str = ""
+    worst_category: str = ""
+    insights: list[dict] = []
+    timeline: list[dict] = []
+    segments: list[dict] = []
+
+
+# ========== White-Label Platform ==========
+class OrganizationCreate(BaseModel):
+    name: str
+    slug: str
+    plan: str = "starter"
+    max_members: int = 5
+    custom_domain: Optional[str] = None
+
+
+class OrganizationUpdate(BaseModel):
+    name: Optional[str] = None
+    plan: Optional[str] = None
+    max_members: Optional[int] = None
+    custom_domain: Optional[str] = None
+    status: Optional[str] = None
+
+
+class Organization(BaseModel):
+    id: Optional[str] = None
+    name: str
+    slug: str
+    owner_user_id: str
+    plan: str = "starter"
+    status: str = "active"
+    max_members: int = 5
+    custom_domain: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class OrgMemberAdd(BaseModel):
+    user_id: str
+    username: str
+    role: str = "viewer"  # "admin", "manager", "viewer"
+    channel: Optional[str] = None
+
+
+class OrgMember(BaseModel):
+    id: Optional[str] = None
+    org_id: str
+    user_id: str
+    username: str
+    role: str = "viewer"
+    channel: Optional[str] = None
+    joined_at: Optional[str] = None
+
+
+class OrgBrandingUpdate(BaseModel):
+    logo_url: Optional[str] = None
+    primary_color: str = "#10b981"
+    secondary_color: str = "#6366f1"
+    accent_color: str = "#f59e0b"
+    dark_mode: bool = True
+    custom_css: Optional[str] = None
+    welcome_message: Optional[str] = None
+
+
+class OrgBranding(BaseModel):
+    org_id: str
+    logo_url: Optional[str] = None
+    primary_color: str = "#10b981"
+    secondary_color: str = "#6366f1"
+    accent_color: str = "#f59e0b"
+    dark_mode: bool = True
+    custom_css: Optional[str] = None
+    welcome_message: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class OrgSettingsUpdate(BaseModel):
+    features_enabled: list[str] = ["coach", "analytics", "clips", "heatmap"]
+    default_role: str = "viewer"
+    require_approval: bool = False
+    billing_email: Optional[str] = None
