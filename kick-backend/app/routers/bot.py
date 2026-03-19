@@ -1,22 +1,22 @@
 """Bot configuration and commands router."""
 
-import json
+import logging
 import random
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
 from app.models.schemas import BotConfig, BotCommand, ModerationRule, ChatMessage, ModerationResult
-from app.services.db import get_conn, _generate_id
+from app.repositories import bot as bot_repo
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
 
 
 @router.get("/config/{channel}")
 async def get_bot_config(channel: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM bot_configs WHERE channel = %s", (channel,))
-        config = await row.fetchone()
+    config = await bot_repo.get_config(channel)
     if config:
         return dict(config)
     return {"channel": channel, "prefix": "!", "enabled": False, "welcome_message": None, "auto_mod_enabled": False}
@@ -24,66 +24,46 @@ async def get_bot_config(channel: str, _session: dict = Depends(require_auth)) -
 
 @router.post("/config")
 async def set_bot_config(config: BotConfig, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute(
-            """INSERT INTO bot_configs (channel, prefix, enabled, welcome_message, auto_mod_enabled)
-               VALUES (%s, %s, %s, %s, %s)
-               ON CONFLICT (channel) DO UPDATE SET
-                   prefix = EXCLUDED.prefix, enabled = EXCLUDED.enabled,
-                   welcome_message = EXCLUDED.welcome_message, auto_mod_enabled = EXCLUDED.auto_mod_enabled""",
-            (config.channel, config.prefix, config.enabled, config.welcome_message, config.auto_mod_enabled),
-        )
-        await conn.commit()
+    await bot_repo.upsert_config(
+        config.channel, config.prefix, config.enabled,
+        config.welcome_message, config.auto_mod_enabled,
+    )
+    logger.info("Bot config updated for channel=%s", config.channel)
     return config.model_dump()
 
 
 @router.get("/commands/{channel}")
 async def get_commands(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
-    async with get_conn() as conn:
-        row = await conn.execute(
-            "SELECT name, response, cooldown, enabled, mod_only FROM bot_commands WHERE channel = %s",
-            (channel,),
-        )
-        commands = await row.fetchall()
-    return [dict(c) for c in commands]
+    return await bot_repo.list_commands(channel)
 
 
 @router.post("/commands/{channel}")
 async def add_command(channel: str, command: BotCommand, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute(
-            """INSERT INTO bot_commands (channel, name, response, cooldown, enabled, mod_only)
-               VALUES (%s, %s, %s, %s, %s, %s)""",
-            (channel, command.name, command.response, command.cooldown, command.enabled, command.mod_only),
-        )
-        await conn.commit()
+    await bot_repo.create_command(
+        channel, command.name, command.response,
+        command.cooldown, command.enabled, command.mod_only,
+    )
+    logger.info("Command !%s added for channel=%s", command.name, channel)
     return command.model_dump()
 
 
 @router.delete("/commands/{channel}/{command_name}")
 async def delete_command(channel: str, command_name: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute(
-            "DELETE FROM bot_commands WHERE channel = %s AND name = %s",
-            (channel, command_name),
-        )
-        await conn.commit()
+    await bot_repo.delete_command(channel, command_name)
+    logger.info("Command !%s deleted from channel=%s", command_name, channel)
     return {"status": "deleted"}
 
 
 @router.put("/commands/{channel}/{command_name}")
 async def update_command(channel: str, command_name: str, command: BotCommand, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute(
-            """UPDATE bot_commands SET name = %s, response = %s, cooldown = %s, enabled = %s, mod_only = %s
-               WHERE channel = %s AND name = %s RETURNING name, response, cooldown, enabled, mod_only""",
-            (command.name, command.response, command.cooldown, command.enabled, command.mod_only, channel, command_name),
-        )
-        updated = await row.fetchone()
-        await conn.commit()
+    updated = await bot_repo.update_command(
+        channel, command_name, command.name, command.response,
+        command.cooldown, command.enabled, command.mod_only,
+    )
     if not updated:
         raise HTTPException(status_code=404, detail="Command not found")
-    return dict(updated)
+    logger.info("Command !%s updated in channel=%s", command_name, channel)
+    return updated
 
 
 # ========== Moderation ==========
@@ -92,22 +72,16 @@ mod_router = APIRouter(prefix="/api/moderation", tags=["moderation"])
 
 @mod_router.get("/rules/{channel}")
 async def get_moderation_rules(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM moderation_rules WHERE channel = %s", (channel,))
-        rules = await row.fetchall()
-    return [dict(r) for r in rules]
+    return await bot_repo.list_moderation_rules(channel)
 
 
 @mod_router.post("/rules/{channel}")
 async def add_moderation_rule(channel: str, rule: ModerationRule, _session: dict = Depends(require_auth)) -> dict:
-    rule_id = _generate_id()
-    async with get_conn() as conn:
-        await conn.execute(
-            """INSERT INTO moderation_rules (id, channel, name, type, enabled, action, severity, settings)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-            (rule_id, channel, rule.name, rule.type, rule.enabled, rule.action, rule.severity, json.dumps(rule.settings)),
-        )
-        await conn.commit()
+    rule_id = await bot_repo.create_moderation_rule(
+        channel, rule.name, rule.type, rule.enabled,
+        rule.action, rule.severity, rule.settings,
+    )
+    logger.info("Moderation rule '%s' created for channel=%s", rule.name, channel)
     result = rule.model_dump()
     result["id"] = rule_id
     return result
@@ -115,24 +89,20 @@ async def add_moderation_rule(channel: str, rule: ModerationRule, _session: dict
 
 @mod_router.put("/rules/{channel}/{rule_id}")
 async def update_moderation_rule(channel: str, rule_id: str, rule: ModerationRule, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute(
-            """UPDATE moderation_rules SET name = %s, type = %s, enabled = %s, action = %s, severity = %s, settings = %s
-               WHERE id = %s AND channel = %s RETURNING *""",
-            (rule.name, rule.type, rule.enabled, rule.action, rule.severity, json.dumps(rule.settings), rule_id, channel),
-        )
-        updated = await row.fetchone()
-        await conn.commit()
+    updated = await bot_repo.update_moderation_rule(
+        channel, rule_id, rule.name, rule.type, rule.enabled,
+        rule.action, rule.severity, rule.settings,
+    )
     if not updated:
         raise HTTPException(status_code=404, detail="Rule not found")
-    return dict(updated)
+    logger.info("Moderation rule '%s' updated in channel=%s", rule.name, channel)
+    return updated
 
 
 @mod_router.delete("/rules/{channel}/{rule_id}")
 async def delete_moderation_rule(channel: str, rule_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute("DELETE FROM moderation_rules WHERE id = %s AND channel = %s", (rule_id, channel))
-        await conn.commit()
+    await bot_repo.delete_moderation_rule(channel, rule_id)
+    logger.info("Moderation rule %s deleted from channel=%s", rule_id, channel)
     return {"status": "deleted"}
 
 

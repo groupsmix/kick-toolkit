@@ -1,166 +1,99 @@
 """Giveaway system router."""
 
-import json
-import random
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
 from app.models.schemas import GiveawayCreate, GiveawayEntry
-from app.services.db import get_conn, _generate_id, _now_iso
+from app.repositories import giveaway as giveaway_repo
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/giveaway", tags=["giveaway"])
 
 
 @router.get("")
 async def list_giveaways(channel: str = "", _session: dict = Depends(require_auth)) -> list[dict]:
-    async with get_conn() as conn:
-        if channel:
-            row = await conn.execute(
-                "SELECT * FROM giveaways WHERE channel = %s ORDER BY created_at DESC", (channel,)
-            )
-        else:
-            row = await conn.execute("SELECT * FROM giveaways ORDER BY created_at DESC")
-        giveaways = await row.fetchall()
-    return [dict(g) for g in giveaways]
+    return await giveaway_repo.list_giveaways(channel)
 
 
 @router.post("/create")
 async def create_giveaway(data: GiveawayCreate, _session: dict = Depends(require_auth)) -> dict:
-    gw_id = _generate_id()
-    now = _now_iso()
-    async with get_conn() as conn:
-        await conn.execute(
-            """INSERT INTO giveaways (id, title, channel, keyword, status, duration_seconds, max_entries,
-               subscriber_only, follower_only, min_account_age_days, entries, winner, created_at, ended_at)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (gw_id, data.title, data.channel, data.keyword, "active", data.duration_seconds,
-             data.max_entries, data.subscriber_only, data.follower_only, data.min_account_age_days,
-             "[]", None, now, None),
-        )
-        await conn.commit()
-    return {
-        "id": gw_id, **data.model_dump(), "status": "active",
-        "entries": [], "winner": None, "created_at": now, "ended_at": None,
-    }
+    result = await giveaway_repo.create(
+        title=data.title, channel=data.channel, keyword=data.keyword,
+        duration_seconds=data.duration_seconds, max_entries=data.max_entries,
+        subscriber_only=data.subscriber_only, follower_only=data.follower_only,
+        min_account_age_days=data.min_account_age_days,
+    )
+    logger.info("Giveaway '%s' created in channel=%s", data.title, data.channel)
+    return result
 
 
 @router.get("/{giveaway_id}")
 async def get_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM giveaways WHERE id = %s", (giveaway_id,))
-        gw = await row.fetchone()
+    gw = await giveaway_repo.get_by_id(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
-    return dict(gw)
+    return gw
 
 
 @router.post("/{giveaway_id}/enter")
 async def enter_giveaway(giveaway_id: str, entry: GiveawayEntry, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM giveaways WHERE id = %s", (giveaway_id,))
-        gw = await row.fetchone()
-
-        if not gw:
-            raise HTTPException(status_code=404, detail="Giveaway not found")
-        if gw["status"] != "active":
-            raise HTTPException(status_code=400, detail="Giveaway is not active")
-
-        entries = gw["entries"] if isinstance(gw["entries"], list) else json.loads(gw["entries"])
-
-        if gw["max_entries"] and len(entries) >= gw["max_entries"]:
-            raise HTTPException(status_code=400, detail="Giveaway is full")
-
-        if any(e["username"].lower() == entry.username.lower() for e in entries):
-            raise HTTPException(status_code=409, detail="Already entered")
-
-        entry_data = {"username": entry.username, "entered_at": _now_iso()}
-        entries.append(entry_data)
-
-        await conn.execute(
-            "UPDATE giveaways SET entries = %s WHERE id = %s",
-            (json.dumps(entries), giveaway_id),
-        )
-        await conn.commit()
-
-    return {"status": "entered", "entry": entry_data, "total_entries": len(entries)}
+    try:
+        entry_data, total = await giveaway_repo.add_entry(giveaway_id, entry.username)
+    except ValueError as e:
+        error_map = {
+            "not_found": (404, "Giveaway not found"),
+            "not_active": (400, "Giveaway is not active"),
+            "full": (400, "Giveaway is full"),
+            "duplicate": (409, "Already entered"),
+        }
+        status, detail = error_map.get(str(e), (400, str(e)))
+        raise HTTPException(status_code=status, detail=detail)
+    return {"status": "entered", "entry": entry_data, "total_entries": total}
 
 
 @router.post("/{giveaway_id}/roll")
 async def roll_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM giveaways WHERE id = %s", (giveaway_id,))
-        gw = await row.fetchone()
-
-        if not gw:
-            raise HTTPException(status_code=404, detail="Giveaway not found")
-
-        entries = gw["entries"] if isinstance(gw["entries"], list) else json.loads(gw["entries"])
-        if not entries:
-            raise HTTPException(status_code=400, detail="No entries to roll from")
-
-        winner = random.choice(entries)
-        now = _now_iso()
-        await conn.execute(
-            "UPDATE giveaways SET winner = %s, status = 'completed', ended_at = %s WHERE id = %s",
-            (winner["username"], now, giveaway_id),
-        )
-        await conn.commit()
-
-    gw_dict = dict(gw)
-    gw_dict["winner"] = winner["username"]
-    gw_dict["status"] = "completed"
-    gw_dict["ended_at"] = now
-    return {"winner": winner["username"], "total_entries": len(entries), "giveaway": gw_dict}
+    try:
+        winner, total, gw_dict = await giveaway_repo.roll_winner(giveaway_id)
+    except ValueError as e:
+        error_map = {
+            "not_found": (404, "Giveaway not found"),
+            "no_entries": (400, "No entries to roll from"),
+        }
+        status, detail = error_map.get(str(e), (400, str(e)))
+        raise HTTPException(status_code=status, detail=detail)
+    logger.info("Giveaway %s winner rolled: %s", giveaway_id, winner)
+    return {"winner": winner, "total_entries": total, "giveaway": gw_dict}
 
 
 @router.post("/{giveaway_id}/reroll")
 async def reroll_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM giveaways WHERE id = %s", (giveaway_id,))
-        gw = await row.fetchone()
-
-        if not gw:
-            raise HTTPException(status_code=404, detail="Giveaway not found")
-
-        entries = gw["entries"] if isinstance(gw["entries"], list) else json.loads(gw["entries"])
-        if not entries:
-            raise HTTPException(status_code=400, detail="No entries to roll from")
-
-        previous_winner = gw["winner"]
-        eligible = [e for e in entries if e["username"] != previous_winner]
-        if not eligible:
-            eligible = entries
-
-        winner = random.choice(eligible)
-        await conn.execute(
-            "UPDATE giveaways SET winner = %s, status = 'completed' WHERE id = %s",
-            (winner["username"], giveaway_id),
-        )
-        await conn.commit()
-
-    return {"winner": winner["username"], "previous_winner": previous_winner, "total_entries": len(entries)}
+    try:
+        winner, previous, total = await giveaway_repo.reroll_winner(giveaway_id)
+    except ValueError as e:
+        error_map = {
+            "not_found": (404, "Giveaway not found"),
+            "no_entries": (400, "No entries to roll from"),
+        }
+        status, detail = error_map.get(str(e), (400, str(e)))
+        raise HTTPException(status_code=status, detail=detail)
+    logger.info("Giveaway %s rerolled: %s -> %s", giveaway_id, previous, winner)
+    return {"winner": winner, "previous_winner": previous, "total_entries": total}
 
 
 @router.post("/{giveaway_id}/close")
 async def close_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
-    now = _now_iso()
-    async with get_conn() as conn:
-        row = await conn.execute(
-            "UPDATE giveaways SET status = 'completed', ended_at = %s WHERE id = %s RETURNING *",
-            (now, giveaway_id),
-        )
-        gw = await row.fetchone()
-        await conn.commit()
-
+    gw = await giveaway_repo.close(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
-    return dict(gw)
+    return gw
 
 
 @router.delete("/{giveaway_id}")
 async def delete_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute("DELETE FROM giveaways WHERE id = %s", (giveaway_id,))
-        await conn.commit()
+    await giveaway_repo.delete(giveaway_id)
+    logger.info("Giveaway %s deleted", giveaway_id)
     return {"status": "deleted"}

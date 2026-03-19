@@ -1,13 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { api } from "@/hooks/useApi";
-
-interface KickUser {
-  user_id?: number;
-  name?: string;
-  email?: string;
-  profile_picture?: string;
-  [key: string]: unknown;
-}
+import type { KickUser } from "@/types";
 
 interface AuthContextType {
   user: KickUser | null;

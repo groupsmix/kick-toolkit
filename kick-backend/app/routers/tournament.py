@@ -1,6 +1,7 @@
 """Tournament organizer router."""
 
 import json
+import logging
 import math
 import random
 
@@ -8,52 +9,36 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth
 from app.models.schemas import TournamentCreate, TournamentParticipant
+from app.repositories import tournament as tournament_repo
 from app.services.db import get_conn, _generate_id, _now_iso
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/tournament", tags=["tournament"])
 
 
 @router.get("")
 async def list_tournaments(channel: str = "", _session: dict = Depends(require_auth)) -> list[dict]:
-    async with get_conn() as conn:
-        if channel:
-            row = await conn.execute(
-                "SELECT * FROM tournaments WHERE channel = %s ORDER BY created_at DESC", (channel,)
-            )
-        else:
-            row = await conn.execute("SELECT * FROM tournaments ORDER BY created_at DESC")
-        tournaments = await row.fetchall()
-    return [dict(t) for t in tournaments]
+    return await tournament_repo.list_tournaments(channel)
 
 
 @router.post("/create")
 async def create_tournament(data: TournamentCreate, _session: dict = Depends(require_auth)) -> dict:
-    t_id = _generate_id()
-    now = _now_iso()
-    async with get_conn() as conn:
-        await conn.execute(
-            """INSERT INTO tournaments (id, name, channel, game, max_participants, format, keyword,
-               status, participants, matches, current_round, winner, created_at, started_at, ended_at)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (t_id, data.name, data.channel, data.game, data.max_participants, data.format,
-             data.keyword, "registration", "[]", "[]", 0, None, now, None, None),
-        )
-        await conn.commit()
-    return {
-        "id": t_id, **data.model_dump(), "status": "registration",
-        "participants": [], "matches": [], "current_round": 0,
-        "winner": None, "created_at": now, "started_at": None, "ended_at": None,
-    }
+    result = await tournament_repo.create(
+        name=data.name, channel=data.channel, game=data.game,
+        max_participants=data.max_participants, fmt=data.format,
+        keyword=data.keyword,
+    )
+    logger.info("Tournament '%s' created in channel=%s", data.name, data.channel)
+    return result
 
 
 @router.get("/{tournament_id}")
 async def get_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
-        t = await row.fetchone()
+    t = await tournament_repo.get_by_id(tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
-    return dict(t)
+    return t
 
 
 @router.post("/{tournament_id}/register")
@@ -181,6 +166,7 @@ async def start_tournament(tournament_id: str, _session: dict = Depends(require_
         await conn.commit()
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         updated = await row.fetchone()
+    logger.info("Tournament %s started", tournament_id)
     return dict(updated)
 
 
@@ -238,9 +224,8 @@ async def set_match_winner(tournament_id: str, match_id: str, winner: str, _sess
 
 @router.delete("/{tournament_id}")
 async def delete_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute("DELETE FROM tournaments WHERE id = %s", (tournament_id,))
-        await conn.commit()
+    await tournament_repo.delete(tournament_id)
+    logger.info("Tournament %s deleted", tournament_id)
     return {"status": "deleted"}
 
 

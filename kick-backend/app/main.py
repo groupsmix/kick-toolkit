@@ -1,9 +1,10 @@
+import logging
 import os
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.auth import router as auth_router
@@ -14,7 +15,16 @@ from app.routers.antialt import router as antialt_router
 from app.routers.tournament import router as tournament_router
 from app.routers.ideas import router as ideas_router
 from app.dependencies import require_auth
-from app.services.db import init_pool, close_pool, create_tables, seed_demo_data, get_conn
+from app.repositories import dashboard as dashboard_repo
+from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
+
+# Structured logging setup
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -86,37 +96,4 @@ async def healthz():
 
 @app.get("/api/dashboard/stats")
 async def dashboard_stats(_session: dict = Depends(require_auth)):
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs")
-        total_messages = (await row.fetchone())["cnt"]
-
-        row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs WHERE flagged = TRUE")
-        flagged_messages = (await row.fetchone())["cnt"]
-
-        row = await conn.execute("SELECT count(DISTINCT username) AS cnt FROM chat_logs")
-        unique_users = (await row.fetchone())["cnt"]
-
-        row = await conn.execute("SELECT count(*) AS cnt FROM giveaways WHERE status = 'active'")
-        active_giveaways = (await row.fetchone())["cnt"]
-
-        row = await conn.execute("SELECT count(*) AS cnt FROM tournaments WHERE status IN ('registration', 'in_progress')")
-        active_tournaments = (await row.fetchone())["cnt"]
-
-        row = await conn.execute("SELECT count(*) AS cnt FROM flagged_accounts")
-        flagged_accounts_count = (await row.fetchone())["cnt"]
-
-        row = await conn.execute("SELECT count(*) AS cnt FROM bot_commands")
-        total_commands = (await row.fetchone())["cnt"]
-
-    moderation_rate = round(flagged_messages / max(total_messages, 1) * 100, 1)
-
-    return {
-        "total_messages": total_messages,
-        "flagged_messages": flagged_messages,
-        "unique_users": unique_users,
-        "active_giveaways": active_giveaways,
-        "active_tournaments": active_tournaments,
-        "flagged_accounts": flagged_accounts_count,
-        "total_commands": total_commands,
-        "moderation_rate": moderation_rate,
-    }
+    return await dashboard_repo.get_stats()

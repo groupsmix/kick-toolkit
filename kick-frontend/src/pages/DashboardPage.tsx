@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/hooks/useApi";
-import { toast } from "sonner";
+import type { DashboardStats } from "@/types";
 import {
   MessageSquare,
   ShieldAlert,
@@ -15,39 +15,16 @@ import {
   Activity,
 } from "lucide-react";
 
-interface DashboardStats {
-  total_messages: number;
-  flagged_messages: number;
-  unique_users: number;
-  active_giveaways: number;
-  active_tournaments: number;
-  flagged_accounts: number;
-  total_commands: number;
-  moderation_rate: number;
-}
-
 export function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  const fetchStats = () => {
-    setLoading(true);
-    setError(null);
-    api<DashboardStats>("/api/dashboard/stats")
-      .then(setStats)
-      .catch((err) => {
-        setError(err.message || "Failed to load dashboard stats");
-        toast.error("Failed to load dashboard stats");
-      })
-      .finally(() => setLoading(false));
-  };
+  const { data: stats, isLoading, error, refetch } = useQuery<DashboardStats>({
+    queryKey: ["dashboard-stats"],
+    queryFn: () => api<DashboardStats>("/api/dashboard/stats"),
+    refetchInterval: 30_000,
+  });
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -58,8 +35,8 @@ export function DashboardPage() {
   if (error || !stats) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-zinc-400">{error || "Failed to load data"}</p>
-        <Button onClick={fetchStats} variant="outline" className="border-zinc-700 text-zinc-300">
+        <p className="text-zinc-400">{error instanceof Error ? error.message : "Failed to load data"}</p>
+        <Button onClick={() => refetch()} variant="outline" className="border-zinc-700 text-zinc-300">
           Retry
         </Button>
       </div>
@@ -73,7 +50,7 @@ export function DashboardPage() {
       icon: MessageSquare,
       color: "text-blue-400",
       bg: "bg-blue-500/10",
-      change: "+12%",
+      change: `${stats.total_messages} total`,
     },
     {
       title: "Unique Chatters",
@@ -81,7 +58,7 @@ export function DashboardPage() {
       icon: Users,
       color: "text-purple-400",
       bg: "bg-purple-500/10",
-      change: "+5%",
+      change: `${stats.unique_users} tracked`,
     },
     {
       title: "Flagged Messages",
@@ -164,9 +141,9 @@ export function DashboardPage() {
                     <Icon className={`w-5 h-5 ${stat.color}`} />
                   </div>
                 </div>
-                <Badge variant="outline" className="mt-3 text-[10px] border-zinc-700 text-zinc-400">
+                <p className="mt-3 text-[10px] text-zinc-500">
                   {stat.change}
-                </Badge>
+                </p>
               </CardContent>
             </Card>
           );
@@ -184,7 +161,10 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-zinc-500 mb-3">Start a quick giveaway with one click</p>
-            <button className="w-full px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-medium rounded-lg text-sm transition-colors">
+            <button
+              onClick={() => navigate("/giveaway")}
+              className="w-full px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-medium rounded-lg text-sm transition-colors"
+            >
               Start Giveaway
             </button>
           </CardContent>
@@ -199,7 +179,10 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-zinc-500 mb-3">Open registration for a new tournament</p>
-            <button className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg text-sm transition-colors">
+            <button
+              onClick={() => navigate("/tournament")}
+              className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg text-sm transition-colors"
+            >
               Create Tournament
             </button>
           </CardContent>
@@ -214,7 +197,10 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-xs text-zinc-500 mb-3">Scan recent chatters for alt accounts</p>
-            <button className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-lg text-sm transition-colors border border-red-500/20">
+            <button
+              onClick={() => navigate("/antialt")}
+              className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-lg text-sm transition-colors border border-red-500/20"
+            >
               Run Scan
             </button>
           </CardContent>
