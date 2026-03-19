@@ -11,6 +11,7 @@ fastapi = {extras = ["standard"], version = "^0.135.1"}
 psycopg = {extras = ["binary"], version = "^3.3.3"}
 pydantic = "^2.12.5"
 httpx = "^0.28.1"
+psycopg-pool = "^3.3.0"
 
 
 [build-system]

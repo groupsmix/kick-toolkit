@@ -1,12 +1,16 @@
 """Kick OAuth 2.1 (PKCE) authentication service."""
 
+import base64
 import hashlib
+import json
 import os
 import secrets
 import uuid
 from typing import Optional
 
 import httpx
+
+from app.services.db import get_conn
 
 KICK_AUTH_URL = "https://id.kick.com/oauth/authorize"
 KICK_TOKEN_URL = "https://id.kick.com/oauth/token"
@@ -20,37 +24,27 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://kick-toolkit.pages.dev")
 
 KICK_SCOPES = "user:read channel:read chat:write events:subscribe moderation:manage chat:moderate"
 
-# In-memory session storage: session_id -> session data
-sessions: dict[str, dict] = {}
-
-# Pending OAuth states: state -> {code_verifier, ...}
-pending_auth: dict[str, dict] = {}
-
 
 def generate_pkce() -> tuple[str, str]:
     """Generate PKCE code_verifier and code_challenge (S256)."""
     code_verifier = secrets.token_urlsafe(64)
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
-    code_challenge = (
-        digest.hex()
-        .encode("ascii")
-    )
-    # Base64url encode the SHA256 hash
-    import base64
     code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
     return code_verifier, code_challenge
 
 
-def create_auth_url() -> tuple[str, str]:
+async def create_auth_url() -> tuple[str, str]:
     """Create the Kick OAuth authorization URL and return (url, session_id)."""
     code_verifier, code_challenge = generate_pkce()
     state = secrets.token_urlsafe(32)
     session_id = str(uuid.uuid4())
 
-    pending_auth[state] = {
-        "code_verifier": code_verifier,
-        "session_id": session_id,
-    }
+    async with get_conn() as conn:
+        await conn.execute(
+            "INSERT INTO pending_auth (state, code_verifier, session_id) VALUES (%s, %s, %s)",
+            (state, code_verifier, session_id),
+        )
+        await conn.commit()
 
     params = {
         "client_id": KICK_CLIENT_ID,
@@ -62,22 +56,26 @@ def create_auth_url() -> tuple[str, str]:
         "code_challenge_method": "S256",
     }
 
-    query = "&".join(f"{k}={httpx.QueryParams({k: v})}" for k, v in params.items())
-    # Build URL properly
     url = f"{KICK_AUTH_URL}?{httpx.QueryParams(params)}"
     return url, session_id
 
 
 async def exchange_code(code: str, state: str) -> Optional[dict]:
     """Exchange authorization code for tokens and fetch user info."""
-    auth_data = pending_auth.pop(state, None)
+    async with get_conn() as conn:
+        row = await conn.execute(
+            "DELETE FROM pending_auth WHERE state = %s RETURNING code_verifier, session_id",
+            (state,),
+        )
+        auth_data = await row.fetchone()
+        await conn.commit()
+
     if not auth_data:
         return None
 
     session_id = auth_data["session_id"]
     code_verifier = auth_data["code_verifier"]
 
-    # Exchange code for tokens
     async with httpx.AsyncClient() as client:
         token_response = await client.post(
             KICK_TOKEN_URL,
@@ -97,7 +95,6 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
 
         token_data = token_response.json()
 
-        # Fetch user info
         user_response = await client.get(
             KICK_USER_URL,
             headers={"Authorization": f"Bearer {token_data['access_token']}"},
@@ -106,30 +103,42 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
         user_data = {}
         if user_response.status_code == 200:
             user_json = user_response.json()
-            # The Kick API returns user data in a "data" array
-            if "data" in user_json and len(user_json["data"]) > 0:
+            if "data" in user_json and isinstance(user_json["data"], list) and len(user_json["data"]) > 0:
                 user_data = user_json["data"][0]
             elif "data" in user_json and isinstance(user_json["data"], dict):
                 user_data = user_json["data"]
             else:
                 user_data = user_json
 
-    # Store session
-    sessions[session_id] = {
-        "access_token": token_data.get("access_token"),
-        "refresh_token": token_data.get("refresh_token"),
-        "expires_in": token_data.get("expires_in"),
-        "token_type": token_data.get("token_type"),
-        "scope": token_data.get("scope"),
-        "user": user_data,
-    }
+    async with get_conn() as conn:
+        await conn.execute(
+            """INSERT INTO sessions (session_id, access_token, refresh_token, expires_in, token_type, scope, user_data)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (session_id) DO UPDATE SET
+                   access_token = EXCLUDED.access_token,
+                   refresh_token = EXCLUDED.refresh_token,
+                   expires_in = EXCLUDED.expires_in,
+                   token_type = EXCLUDED.token_type,
+                   scope = EXCLUDED.scope,
+                   user_data = EXCLUDED.user_data""",
+            (session_id, token_data.get("access_token"), token_data.get("refresh_token"),
+             token_data.get("expires_in"), token_data.get("token_type"),
+             token_data.get("scope"), json.dumps(user_data)),
+        )
+        await conn.commit()
 
     return {"session_id": session_id, "user": user_data}
 
 
 async def refresh_session(session_id: str) -> Optional[dict]:
     """Refresh the access token for a session."""
-    session = sessions.get(session_id)
+    async with get_conn() as conn:
+        row = await conn.execute(
+            "SELECT refresh_token FROM sessions WHERE session_id = %s",
+            (session_id,),
+        )
+        session = await row.fetchone()
+
     if not session or not session.get("refresh_token"):
         return None
 
@@ -149,16 +158,29 @@ async def refresh_session(session_id: str) -> Optional[dict]:
             return None
 
         token_data = response.json()
-        session["access_token"] = token_data.get("access_token")
-        session["refresh_token"] = token_data.get("refresh_token")
-        session["expires_in"] = token_data.get("expires_in")
 
-        return {"status": "refreshed", "expires_in": token_data.get("expires_in")}
+    async with get_conn() as conn:
+        await conn.execute(
+            """UPDATE sessions SET access_token = %s, refresh_token = %s, expires_in = %s
+               WHERE session_id = %s""",
+            (token_data.get("access_token"), token_data.get("refresh_token"),
+             token_data.get("expires_in"), session_id),
+        )
+        await conn.commit()
+
+    return {"status": "refreshed", "expires_in": token_data.get("expires_in")}
 
 
 async def revoke_session(session_id: str) -> bool:
     """Revoke tokens and delete session."""
-    session = sessions.pop(session_id, None)
+    async with get_conn() as conn:
+        row = await conn.execute(
+            "DELETE FROM sessions WHERE session_id = %s RETURNING access_token",
+            (session_id,),
+        )
+        session = await row.fetchone()
+        await conn.commit()
+
     if not session:
         return False
 
@@ -173,6 +195,15 @@ async def revoke_session(session_id: str) -> bool:
     return True
 
 
-def get_session(session_id: str) -> Optional[dict]:
+async def get_session(session_id: str) -> Optional[dict]:
     """Get session data by session ID."""
-    return sessions.get(session_id)
+    async with get_conn() as conn:
+        row = await conn.execute(
+            "SELECT session_id, access_token, refresh_token, expires_in, token_type, scope, user_data FROM sessions WHERE session_id = %s",
+            (session_id,),
+        )
+        session = await row.fetchone()
+
+    if not session:
+        return None
+    return dict(session)

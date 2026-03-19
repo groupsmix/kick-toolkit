@@ -1,3 +1,6 @@
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,16 +11,32 @@ from app.routers.giveaway import router as giveaway_router
 from app.routers.antialt import router as antialt_router
 from app.routers.tournament import router as tournament_router
 from app.routers.ideas import router as ideas_router
+from app.services.db import init_pool, close_pool, create_tables, seed_demo_data, get_conn
 
-app = FastAPI(title="Kick Toolkit API", version="1.0.0")
 
-# Disable CORS. Do not remove this for full-stack development.
+ALLOWED_ORIGINS = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "https://kick-toolkit.pages.dev,https://api.zidni.store",
+).split(",")
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    await init_pool()
+    await create_tables()
+    await seed_demo_data()
+    yield
+    await close_pool()
+
+
+app = FastAPI(title="Kick Toolkit API", version="1.0.0", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include all routers
@@ -38,19 +57,37 @@ async def healthz():
 
 @app.get("/api/dashboard/stats")
 async def dashboard_stats():
-    from app.services.database import chat_logs, giveaways, tournaments, flagged_accounts, bot_commands
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs")
+        total_messages = (await row.fetchone())["cnt"]
 
-    active_giveaways = sum(1 for g in giveaways.values() if g["status"] == "active")
-    active_tournaments = sum(1 for t in tournaments.values() if t["status"] in ["registration", "in_progress"])
-    total_commands = sum(len(cmds) for cmds in bot_commands.values())
+        row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs WHERE flagged = TRUE")
+        flagged_messages = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(DISTINCT username) AS cnt FROM chat_logs")
+        unique_users = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM giveaways WHERE status = 'active'")
+        active_giveaways = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM tournaments WHERE status IN ('registration', 'in_progress')")
+        active_tournaments = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM flagged_accounts")
+        flagged_accounts_count = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM bot_commands")
+        total_commands = (await row.fetchone())["cnt"]
+
+    moderation_rate = round(flagged_messages / max(total_messages, 1) * 100, 1)
 
     return {
-        "total_messages": len(chat_logs),
-        "flagged_messages": sum(1 for l in chat_logs if l["flagged"]),
-        "unique_users": len(set(l["username"] for l in chat_logs)),
+        "total_messages": total_messages,
+        "flagged_messages": flagged_messages,
+        "unique_users": unique_users,
         "active_giveaways": active_giveaways,
         "active_tournaments": active_tournaments,
-        "flagged_accounts": len(flagged_accounts),
+        "flagged_accounts": flagged_accounts_count,
         "total_commands": total_commands,
-        "moderation_rate": round(sum(1 for l in chat_logs if l["flagged"]) / max(len(chat_logs), 1) * 100, 1),
+        "moderation_rate": moderation_rate,
     }

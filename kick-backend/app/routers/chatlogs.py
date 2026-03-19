@@ -1,9 +1,10 @@
 """Chat logs router."""
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from typing import Optional
-from app.models.schemas import ChatLogEntry
-from app.services.database import chat_logs, generate_id, now_iso
+
+from app.dependencies import require_auth
+from app.services.db import get_conn, _generate_id, _now_iso
 
 router = APIRouter(prefix="/api/chatlogs", tags=["chatlogs"])
 
@@ -16,66 +17,116 @@ async def get_chat_logs(
     search: Optional[str] = None,
     limit: int = Query(default=100, le=500),
     offset: int = 0,
+    _session: dict = Depends(require_auth),
 ) -> dict:
-    filtered = chat_logs.copy()
+    conditions = []
+    params: list = []
 
     if channel:
-        filtered = [l for l in filtered if l["channel"] == channel]
+        conditions.append("channel = %s")
+        params.append(channel)
     if username:
-        filtered = [l for l in filtered if l["username"].lower() == username.lower()]
+        conditions.append("lower(username) = lower(%s)")
+        params.append(username)
     if flagged_only:
-        filtered = [l for l in filtered if l["flagged"]]
+        conditions.append("flagged = TRUE")
     if search:
-        search_lower = search.lower()
-        filtered = [l for l in filtered if search_lower in l["message"].lower() or search_lower in l["username"].lower()]
+        conditions.append("(lower(message) LIKE %s OR lower(username) LIKE %s)")
+        pattern = f"%{search.lower()}%"
+        params.extend([pattern, pattern])
 
-    total = len(filtered)
-    filtered = filtered[offset:offset + limit]
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
-    return {"logs": filtered, "total": total, "limit": limit, "offset": offset}
+    async with get_conn() as conn:
+        row = await conn.execute(f"SELECT count(*) AS cnt FROM chat_logs {where}", params)
+        total = (await row.fetchone())["cnt"]
+
+        row = await conn.execute(
+            f"SELECT * FROM chat_logs {where} ORDER BY timestamp LIMIT %s OFFSET %s",
+            params + [limit, offset],
+        )
+        logs = await row.fetchall()
+
+    return {"logs": [dict(l) for l in logs], "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/user/{username}")
-async def get_user_logs(username: str) -> dict:
-    user_logs = [l for l in chat_logs if l["username"].lower() == username.lower()]
-    total_messages = len(user_logs)
-    flagged_messages = sum(1 for l in user_logs if l["flagged"])
-    channels = list(set(l["channel"] for l in user_logs))
+async def get_user_logs(username: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute(
+            "SELECT * FROM chat_logs WHERE lower(username) = lower(%s) ORDER BY timestamp DESC LIMIT 100",
+            (username,),
+        )
+        user_logs = [dict(r) for r in await row.fetchall()]
+
+        row = await conn.execute(
+            "SELECT count(*) AS cnt FROM chat_logs WHERE lower(username) = lower(%s)",
+            (username,),
+        )
+        total_messages = (await row.fetchone())["cnt"]
+
+        row = await conn.execute(
+            "SELECT count(*) AS cnt FROM chat_logs WHERE lower(username) = lower(%s) AND flagged = TRUE",
+            (username,),
+        )
+        flagged_messages = (await row.fetchone())["cnt"]
+
+        row = await conn.execute(
+            "SELECT DISTINCT channel FROM chat_logs WHERE lower(username) = lower(%s)",
+            (username,),
+        )
+        channels = [r["channel"] for r in await row.fetchall()]
 
     return {
         "username": username,
         "total_messages": total_messages,
         "flagged_messages": flagged_messages,
         "channels": channels,
-        "logs": user_logs[-100:],
+        "logs": user_logs,
     }
 
 
 @router.post("")
-async def add_chat_log(entry: ChatLogEntry) -> dict:
-    log_entry = entry.model_dump()
-    log_entry["id"] = generate_id()
-    if not log_entry.get("timestamp"):
-        log_entry["timestamp"] = now_iso()
-    chat_logs.append(log_entry)
-    return log_entry
+async def add_chat_log(entry: dict, _session: dict = Depends(require_auth)) -> dict:
+    log_id = _generate_id()
+    timestamp = entry.get("timestamp") or _now_iso()
+    async with get_conn() as conn:
+        await conn.execute(
+            """INSERT INTO chat_logs (id, channel, username, message, timestamp, flagged, flag_reason)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (log_id, entry["channel"], entry["username"], entry["message"],
+             timestamp, entry.get("flagged", False), entry.get("flag_reason")),
+        )
+        await conn.commit()
+    return {
+        "id": log_id, "channel": entry["channel"], "username": entry["username"],
+        "message": entry["message"], "timestamp": timestamp,
+        "flagged": entry.get("flagged", False), "flag_reason": entry.get("flag_reason"),
+    }
 
 
 @router.get("/stats/{channel}")
-async def get_chat_stats(channel: str) -> dict:
-    channel_logs = [l for l in chat_logs if l["channel"] == channel]
-    total = len(channel_logs)
-    flagged = sum(1 for l in channel_logs if l["flagged"])
-    unique_users = len(set(l["username"] for l in channel_logs))
-    top_chatters = {}
-    for l in channel_logs:
-        top_chatters[l["username"]] = top_chatters.get(l["username"], 0) + 1
-    sorted_chatters = sorted(top_chatters.items(), key=lambda x: x[1], reverse=True)[:10]
+async def get_chat_stats(channel: str, _session: dict = Depends(require_auth)) -> dict:
+    async with get_conn() as conn:
+        row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs WHERE channel = %s", (channel,))
+        total = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(*) AS cnt FROM chat_logs WHERE channel = %s AND flagged = TRUE", (channel,))
+        flagged = (await row.fetchone())["cnt"]
+
+        row = await conn.execute("SELECT count(DISTINCT username) AS cnt FROM chat_logs WHERE channel = %s", (channel,))
+        unique_users = (await row.fetchone())["cnt"]
+
+        row = await conn.execute(
+            "SELECT username, count(*) AS cnt FROM chat_logs WHERE channel = %s GROUP BY username ORDER BY cnt DESC LIMIT 10",
+            (channel,),
+        )
+        top_chatters = [{"username": r["username"], "count": r["cnt"]} for r in await row.fetchall()]
 
     return {
         "channel": channel,
         "total_messages": total,
         "flagged_messages": flagged,
         "unique_users": unique_users,
-        "top_chatters": [{"username": u, "count": c} for u, c in sorted_chatters],
+        "top_chatters": top_chatters,
     }
