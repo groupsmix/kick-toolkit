@@ -13,6 +13,11 @@ import { TournamentPage } from "@/pages/TournamentPage";
 import { IdeasPage } from "@/pages/IdeasPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
+import { LandingPage } from "@/pages/LandingPage";
+import { PricingPage } from "@/pages/PricingPage";
+import { TermsPage } from "@/pages/TermsPage";
+import { PrivacyPage } from "@/pages/PrivacyPage";
+import { DisclaimerPage } from "@/pages/DisclaimerPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -32,29 +37,112 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Show landing page for unauthenticated users, dashboard for authenticated */
+function HomePage() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-zinc-950">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LandingPage />;
+  }
+
+  return (
+    <AppLayout>
+      <DashboardPage />
+    </AppLayout>
+  );
+}
+
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public routes */}
+      <Route path="/" element={<HomePage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/disclaimer" element={<DisclaimerPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+
+      {/* Protected app routes */}
       <Route
-        path="/*"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <AppLayout>
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/bot" element={<BotPage />} />
-                <Route path="/chatlogs" element={<ChatLogsPage />} />
-                <Route path="/giveaway" element={<GiveawayPage />} />
-                <Route path="/antialt" element={<AntiAltPage />} />
-                <Route path="/tournament" element={<TournamentPage />} />
-                <Route path="/ideas" element={<IdeasPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+              <DashboardPage />
             </AppLayout>
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/bot"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <BotPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chatlogs"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ChatLogsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/giveaway"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <GiveawayPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/antialt"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <AntiAltPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tournament"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <TournamentPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ideas"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <IdeasPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

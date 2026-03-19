@@ -14,6 +14,7 @@ from app.routers.giveaway import router as giveaway_router
 from app.routers.antialt import router as antialt_router
 from app.routers.tournament import router as tournament_router
 from app.routers.ideas import router as ideas_router
+from app.routers.subscription import router as subscription_router, webhook_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -87,6 +88,8 @@ app.include_router(giveaway_router)
 app.include_router(antialt_router)
 app.include_router(tournament_router)
 app.include_router(ideas_router)
+app.include_router(subscription_router)
+app.include_router(webhook_router)
 
 
 @app.get("/healthz")

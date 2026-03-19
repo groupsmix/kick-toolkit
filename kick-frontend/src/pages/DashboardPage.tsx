@@ -2,8 +2,10 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { api } from "@/hooks/useApi";
-import type { DashboardStats } from "@/types";
+import type { DashboardStats, SubscriptionResponse } from "@/types";
 import {
   MessageSquare,
   ShieldAlert,
@@ -13,6 +15,8 @@ import {
   Bot,
   TrendingUp,
   Activity,
+  Crown,
+  ArrowUpRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -25,6 +29,16 @@ export function DashboardPage() {
     queryFn: () => api<DashboardStats>("/api/dashboard/stats"),
     refetchInterval: 30_000,
   });
+
+  const { data: subData } = useQuery<SubscriptionResponse>({
+    queryKey: ["subscription"],
+    queryFn: () => api<SubscriptionResponse>("/api/subscription/me"),
+  });
+
+  const currentPlan = subData?.plan?.name || "Free";
+  const planId = subData?.plan?.id || "free";
+  const planLimits = subData?.plan?.limits || {};
+  const usage = subData?.usage || {};
 
   if (isLoading) {
     return (
@@ -116,16 +130,102 @@ export function DashboardPage() {
     <div className="space-y-6">
       {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-emerald-500/20 via-emerald-500/10 to-transparent border border-emerald-500/20 p-6">
-        <div className="relative z-10">
-          <h2 className="text-2xl font-bold text-white mb-1">Welcome back, {user?.name || "Streamer"}!</h2>
-          <p className="text-zinc-400">
-            Your toolkit is running smoothly. Here's what's happening on your channel.
-          </p>
+        <div className="relative z-10 flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">Welcome back, {user?.name || "Streamer"}!</h2>
+            <p className="text-zinc-400">
+              Your toolkit is running smoothly. Here's what's happening on your channel.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge
+              className={`px-3 py-1 text-xs font-bold uppercase tracking-wider ${
+                planId === "premium"
+                  ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
+                  : planId === "pro"
+                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                  : "bg-zinc-700/50 text-zinc-400 border-zinc-600/30"
+              }`}
+            >
+              <Crown className="w-3 h-3 mr-1" />
+              {currentPlan}
+            </Badge>
+            {planId === "free" && (
+              <Button
+                size="sm"
+                className="bg-emerald-500 hover:bg-emerald-600 text-black text-xs font-semibold"
+                onClick={() => navigate("/pricing")}
+              >
+                Upgrade
+                <ArrowUpRight className="w-3 h-3 ml-1" />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10">
           <TrendingUp className="w-32 h-32 text-emerald-500" />
         </div>
       </div>
+
+      {/* Usage Limits (for free plan) */}
+      {planId === "free" && (
+        <Card className="bg-zinc-900/50 border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-zinc-400 flex items-center justify-between">
+              <span>Plan Usage</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-emerald-400 hover:text-emerald-300 text-xs"
+                onClick={() => navigate("/pricing")}
+              >
+                Upgrade for unlimited
+                <ArrowUpRight className="w-3 h-3 ml-1" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-zinc-500">Bot Commands</span>
+                  <span className="text-xs text-zinc-400">
+                    {usage.bot_commands || 0} / {planLimits.bot_commands === -1 ? "\u221E" : planLimits.bot_commands || 5}
+                  </span>
+                </div>
+                <Progress
+                  value={planLimits.bot_commands === -1 ? 0 : ((usage.bot_commands || 0) / (planLimits.bot_commands || 5)) * 100}
+                  className="h-2"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-zinc-500">Chat Logs</span>
+                  <span className="text-xs text-zinc-400">
+                    {usage.chat_log_entries || 0} / {planLimits.chat_log_entries === -1 ? "\u221E" : planLimits.chat_log_entries || 100}
+                  </span>
+                </div>
+                <Progress
+                  value={planLimits.chat_log_entries === -1 ? 0 : ((usage.chat_log_entries || 0) / (planLimits.chat_log_entries || 100)) * 100}
+                  className="h-2"
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-zinc-500">Active Giveaways</span>
+                  <span className="text-xs text-zinc-400">
+                    {usage.active_giveaways || 0} / {planLimits.active_giveaways === -1 ? "\u221E" : planLimits.active_giveaways || 1}
+                  </span>
+                </div>
+                <Progress
+                  value={planLimits.active_giveaways === -1 ? 0 : ((usage.active_giveaways || 0) / (planLimits.active_giveaways || 1)) * 100}
+                  className="h-2"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

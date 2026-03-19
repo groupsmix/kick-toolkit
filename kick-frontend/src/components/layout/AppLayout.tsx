@@ -9,6 +9,7 @@ import { Menu } from "lucide-react";
 
 const PAGE_CONFIG: Record<string, { title: string; subtitle: string }> = {
   "/": { title: "Dashboard", subtitle: "Overview of your Kick channel" },
+  "/dashboard": { title: "Dashboard", subtitle: "Overview of your Kick channel" },
   "/bot": { title: "Chat Bot & AI Moderation", subtitle: "Manage commands and auto-moderation" },
   "/chatlogs": { title: "Chat Logs", subtitle: "View and search chat history" },
   "/giveaway": { title: "Giveaway Roller", subtitle: "Create and manage giveaways" },
