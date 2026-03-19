@@ -1,17 +1,12 @@
-import { Bell, Search, LogOut } from "lucide-react";
+import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Bell, Search, LogOut, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-
-interface KickUser {
-  user_id?: number;
-  name?: string;
-  email?: string;
-  profile_picture?: string;
-  [key: string]: unknown;
-}
+import type { KickUser } from "@/types";
 
 interface HeaderProps {
   title: string;
@@ -20,12 +15,43 @@ interface HeaderProps {
   children?: React.ReactNode;
 }
 
+const PAGE_ROUTES: Record<string, string> = {
+  bot: "/bot",
+  chat: "/chatlogs",
+  logs: "/chatlogs",
+  giveaway: "/giveaway",
+  tournament: "/tournament",
+  antialt: "/antialt",
+  alt: "/antialt",
+  ideas: "/ideas",
+  dashboard: "/",
+};
+
 export function Header({ title, subtitle, user, children }: HeaderProps) {
   const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const displayName = user?.name || "Streamer";
   const initials = displayName.slice(0, 2).toUpperCase();
   const profilePic = user?.profile_picture;
+
+  const handleSearch = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return;
+      for (const [keyword, route] of Object.entries(PAGE_ROUTES)) {
+        if (q.includes(keyword)) {
+          navigate(route);
+          setSearchQuery("");
+          return;
+        }
+      }
+    },
+    [searchQuery, navigate],
+  );
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm">
@@ -38,18 +64,40 @@ export function Header({ title, subtitle, user, children }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="relative hidden sm:block">
+        <form onSubmit={handleSearch} className="relative hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <Input
-            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Navigate to page..."
             className="w-64 pl-9 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-emerald-500"
           />
-        </div>
+        </form>
 
-        <Button variant="ghost" size="icon" className="relative text-zinc-400 hover:text-white">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
-        </Button>
+        <div className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-zinc-400 hover:text-white"
+            onClick={() => setShowNotifications(!showNotifications)}
+          >
+            <Bell className="w-5 h-5" />
+          </Button>
+
+          {showNotifications && (
+            <div className="absolute right-0 top-full mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50">
+              <div className="flex items-center justify-between p-3 border-b border-zinc-800">
+                <span className="text-sm font-medium text-white">Notifications</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400" onClick={() => setShowNotifications(false)}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+              <div className="p-4 text-center">
+                <p className="text-xs text-zinc-500">No new notifications</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
           <Avatar className="w-8 h-8">

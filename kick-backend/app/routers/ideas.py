@@ -1,13 +1,16 @@
 """Stream giveaway ideas generator router."""
 
+import logging
 import random
 
-from fastapi import APIRouter, Depends, Query
-from typing import Optional
+from fastapi import APIRouter, Depends
 
 from app.dependencies import require_auth
 from app.models.schemas import GiveawayIdea, IdeaGenerateRequest
-from app.services.db import get_conn, _generate_id
+from app.repositories import ideas as ideas_repo
+from app.services.db import _generate_id
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ideas", tags=["ideas"])
 
@@ -53,48 +56,27 @@ async def generate_ideas(req: IdeaGenerateRequest) -> list[dict]:
 
     selected = random.sample(pool, min(5, len(pool)))
 
-    ideas = []
-    for idea in selected:
-        ideas.append({
-            "id": _generate_id(),
-            **idea,
-            "saved": False,
-        })
-
-    return ideas
+    return [{"id": _generate_id(), **idea, "saved": False} for idea in selected]
 
 
 @router.get("/saved")
 async def get_saved_ideas(_session: dict = Depends(require_auth)) -> list[dict]:
-    async with get_conn() as conn:
-        row = await conn.execute("SELECT * FROM saved_ideas")
-        ideas = await row.fetchall()
-    return [dict(i) for i in ideas]
+    return await ideas_repo.list_saved()
 
 
 @router.post("/save")
 async def save_idea(idea: GiveawayIdea, _session: dict = Depends(require_auth)) -> dict:
-    import json
-    idea_id = _generate_id()
-    async with get_conn() as conn:
-        await conn.execute(
-            """INSERT INTO saved_ideas (id, title, description, category, estimated_cost, engagement_level, requirements, saved)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (idea_id, idea.title, idea.description, idea.category, idea.estimated_cost,
-             idea.engagement_level, json.dumps(idea.requirements), True),
-        )
-        await conn.commit()
-    result = idea.model_dump()
-    result["id"] = idea_id
-    result["saved"] = True
+    result = await ideas_repo.save_idea(
+        idea.title, idea.description, idea.category,
+        idea.estimated_cost, idea.engagement_level, idea.requirements,
+    )
+    logger.info("Idea '%s' saved", idea.title)
     return result
 
 
 @router.delete("/saved/{idea_id}")
 async def delete_saved_idea(idea_id: str, _session: dict = Depends(require_auth)) -> dict:
-    async with get_conn() as conn:
-        await conn.execute("DELETE FROM saved_ideas WHERE id = %s", (idea_id,))
-        await conn.commit()
+    await ideas_repo.delete_saved(idea_id)
     return {"status": "deleted"}
 
 
