@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import logging
 import os
 import secrets
 import uuid
@@ -11,6 +12,8 @@ from typing import Optional
 import httpx
 
 from app.services.db import get_conn
+
+logger = logging.getLogger(__name__)
 
 KICK_AUTH_URL = "https://id.kick.com/oauth/authorize"
 KICK_TOKEN_URL = "https://id.kick.com/oauth/token"
@@ -91,9 +94,11 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
         )
 
         if token_response.status_code != 200:
+            logger.error("Token exchange failed: status=%s body=%s", token_response.status_code, token_response.text[:200])
             return None
 
         token_data = token_response.json()
+        logger.info("Token exchange succeeded, fetching user info")
 
         user_response = await client.get(
             KICK_USER_URL,
@@ -109,6 +114,8 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
                 user_data = user_json["data"]
             else:
                 user_data = user_json
+        else:
+            logger.warning("User info fetch failed: status=%s", user_response.status_code)
 
     async with get_conn() as conn:
         await conn.execute(

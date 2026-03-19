@@ -15,8 +15,9 @@ export function AuthCallbackPage() {
     // Case 1: Redirected back from backend with session_id
     if (sessionId) {
       localStorage.setItem("kick_session_id", sessionId);
-      navigate("/", { replace: true });
-      window.location.reload();
+      // Full navigation to root — triggers a clean mount of AuthProvider
+      // which will read the new session_id and validate it.
+      window.location.href = "/";
       return;
     }
 
