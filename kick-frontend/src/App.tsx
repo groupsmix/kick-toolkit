@@ -17,6 +17,15 @@ import { StreamCoachPage } from "@/pages/StreamCoachPage";
 import { ClipsPage } from "@/pages/ClipsPage";
 import { HeatmapPage } from "@/pages/HeatmapPage";
 import { WhiteLabelPage } from "@/pages/WhiteLabelPage";
+import { LoyaltyPage } from "@/pages/LoyaltyPage";
+import { SongRequestPage } from "@/pages/SongRequestPage";
+import { SchedulePage } from "@/pages/SchedulePage";
+import { OverlaysPage } from "@/pages/OverlaysPage";
+import { PublicProfilePage } from "@/pages/PublicProfilePage";
+import { ChatOverlay } from "@/pages/overlays/ChatOverlay";
+import { AlertOverlay } from "@/pages/overlays/AlertOverlay";
+import { GiveawayOverlay } from "@/pages/overlays/GiveawayOverlay";
+import { NowPlayingOverlay } from "@/pages/overlays/NowPlayingOverlay";
 import { MarketplacePage } from "@/pages/MarketplacePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
@@ -210,6 +219,46 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/loyalty"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <LoyaltyPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/songs"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SongRequestPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/schedule"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <SchedulePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/overlays"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <OverlaysPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/marketplace"
         element={
           <ProtectedRoute>
@@ -219,6 +268,16 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Public routes - no auth required */}
+      <Route path="/streamer/:channel" element={<PublicProfilePage />} />
+
+      {/* OBS overlay widget routes - token-based auth, no login required */}
+      <Route path="/overlay/chat" element={<ChatOverlay />} />
+      <Route path="/overlay/alerts" element={<AlertOverlay />} />
+      <Route path="/overlay/giveaway" element={<GiveawayOverlay />} />
+      <Route path="/overlay/nowplaying" element={<NowPlayingOverlay />} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
