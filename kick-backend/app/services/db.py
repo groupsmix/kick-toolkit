@@ -417,6 +417,136 @@ CREATE TABLE IF NOT EXISTS stream_snapshots (
     game TEXT NOT NULL DEFAULT '',
     recorded_at TEXT NOT NULL
 );
+
+-- ========== AI Clip Pipeline ==========
+CREATE TABLE IF NOT EXISTS hype_moments (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    session_id TEXT,
+    timestamp_start TEXT NOT NULL,
+    timestamp_end TEXT NOT NULL,
+    intensity FLOAT NOT NULL DEFAULT 0.0,
+    trigger_type TEXT NOT NULL DEFAULT 'chat_spike',
+    message_count INT NOT NULL DEFAULT 0,
+    peak_rate FLOAT NOT NULL DEFAULT 0.0,
+    sample_messages JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'detected',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS generated_clips (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    hype_moment_id TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    caption TEXT NOT NULL DEFAULT '',
+    file_path TEXT,
+    thumbnail_path TEXT,
+    duration_seconds FLOAT NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    platform_specs JSONB NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS clip_posts (
+    id TEXT PRIMARY KEY,
+    clip_id TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    platform_post_id TEXT,
+    post_url TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    caption TEXT NOT NULL DEFAULT '',
+    error_message TEXT,
+    posted_at TEXT,
+    created_at TEXT NOT NULL
+);
+
+-- ========== Viewer Heatmap ==========
+CREATE TABLE IF NOT EXISTS viewer_sessions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    stream_session_id TEXT,
+    username TEXT NOT NULL,
+    joined_at TEXT NOT NULL,
+    left_at TEXT,
+    duration_seconds INT NOT NULL DEFAULT 0,
+    messages_sent INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS content_segments (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    stream_session_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    viewer_count_start INT NOT NULL DEFAULT 0,
+    viewer_count_end INT NOT NULL DEFAULT 0,
+    avg_viewers FLOAT NOT NULL DEFAULT 0.0,
+    retention_rate FLOAT NOT NULL DEFAULT 0.0,
+    chat_activity INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS heatmap_snapshots (
+    id SERIAL PRIMARY KEY,
+    channel TEXT NOT NULL,
+    stream_session_id TEXT NOT NULL,
+    minute_offset INT NOT NULL DEFAULT 0,
+    viewer_count INT NOT NULL DEFAULT 0,
+    message_count INT NOT NULL DEFAULT 0,
+    unique_chatters INT NOT NULL DEFAULT 0,
+    category TEXT NOT NULL DEFAULT '',
+    recorded_at TEXT NOT NULL
+);
+
+-- ========== White-Label Platform ==========
+CREATE TABLE IF NOT EXISTS organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    owner_user_id TEXT NOT NULL,
+    plan TEXT NOT NULL DEFAULT 'starter',
+    status TEXT NOT NULL DEFAULT 'active',
+    max_members INT NOT NULL DEFAULT 5,
+    custom_domain TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS org_members (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'viewer',
+    channel TEXT,
+    joined_at TEXT NOT NULL,
+    UNIQUE(org_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS org_branding (
+    org_id TEXT PRIMARY KEY,
+    logo_url TEXT,
+    primary_color TEXT NOT NULL DEFAULT '#10b981',
+    secondary_color TEXT NOT NULL DEFAULT '#6366f1',
+    accent_color TEXT NOT NULL DEFAULT '#f59e0b',
+    dark_mode BOOLEAN NOT NULL DEFAULT TRUE,
+    custom_css TEXT,
+    welcome_message TEXT,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS org_settings (
+    org_id TEXT PRIMARY KEY,
+    features_enabled JSONB NOT NULL DEFAULT '["coach","analytics","clips","heatmap"]',
+    default_role TEXT NOT NULL DEFAULT 'viewer',
+    require_approval BOOLEAN NOT NULL DEFAULT FALSE,
+    billing_email TEXT,
+    updated_at TEXT NOT NULL
+);
 """
 
 

@@ -14,6 +14,9 @@ import {
   Zap,
   BarChart3,
   Brain,
+  Scissors,
+  Map,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -35,6 +38,9 @@ const navItems = [
   { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
   { path: "/analytics", label: "Predictive Analytics", icon: BarChart3, premium: true },
   { path: "/coach", label: "AI Stream Coach", icon: Brain, premium: true },
+  { path: "/clips", label: "AI Clip Pipeline", icon: Scissors, premium: true },
+  { path: "/heatmap", label: "Viewer Heatmap", icon: Map, premium: true },
+  { path: "/whitelabel", label: "White-Label", icon: Building2, premium: true },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
