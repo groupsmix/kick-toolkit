@@ -1,3 +1,4 @@
+import { useNavigate, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -15,23 +16,24 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 interface SidebarProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
   collapsed: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }
 
 const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "bot", label: "Chat Bot & AI Mod", icon: Bot },
-  { id: "chatlogs", label: "Chat Logs", icon: MessageSquare },
-  { id: "giveaway", label: "Giveaway Roller", icon: Gift },
-  { id: "antialt", label: "Anti-Alt Detection", icon: ShieldAlert, premium: true },
-  { id: "tournament", label: "Tournament", icon: Trophy },
-  { id: "ideas", label: "Giveaway Ideas", icon: Lightbulb },
+  { path: "/", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/bot", label: "Chat Bot & AI Mod", icon: Bot },
+  { path: "/chatlogs", label: "Chat Logs", icon: MessageSquare },
+  { path: "/giveaway", label: "Giveaway Roller", icon: Gift },
+  { path: "/antialt", label: "Anti-Alt Detection", icon: ShieldAlert, premium: true },
+  { path: "/tournament", label: "Tournament", icon: Trophy },
+  { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
 ];
 
-export function Sidebar({ currentPage, onNavigate, collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   return (
     <div
       className={cn(
@@ -58,11 +60,11 @@ export function Sidebar({ currentPage, onNavigate, collapsed, onToggle }: Sideba
       <nav className="flex-1 px-2 py-4 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentPage === item.id;
+          const isActive = location.pathname === item.path;
           return (
             <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
+              key={item.path}
+              onClick={() => { navigate(item.path); onNavigate?.(); }}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
                 isActive

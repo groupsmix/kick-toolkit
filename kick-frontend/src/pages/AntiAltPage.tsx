@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   ShieldAlert,
   Search,
@@ -50,9 +51,20 @@ export function AntiAltPage() {
   const [checkResult, setCheckResult] = useState<FlaggedAccount | null>(null);
   const [checking, setChecking] = useState(false);
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    api<FlaggedAccount[]>("/api/antialt/flagged").then(setFlagged);
-    api<AntiAltSettings>("/api/antialt/settings").then(setSettings);
+    setLoading(true);
+    Promise.all([
+      api<FlaggedAccount[]>("/api/antialt/flagged").then(setFlagged),
+      api<AntiAltSettings>("/api/antialt/settings").then(setSettings),
+    ])
+      .catch((err) => {
+        setError(err.message || "Failed to load anti-alt data");
+        toast.error("Failed to load anti-alt data");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const checkUser = async () => {
@@ -69,13 +81,23 @@ export function AntiAltPage() {
   };
 
   const removeUser = async (username: string) => {
-    await api(`/api/antialt/flagged/${username}`, { method: "DELETE" });
-    setFlagged(flagged.filter((a) => a.username !== username));
+    try {
+      await api(`/api/antialt/flagged/${username}`, { method: "DELETE" });
+      setFlagged(flagged.filter((a) => a.username !== username));
+      toast.success(`${username} removed from flagged list`);
+    } catch {
+      toast.error("Failed to remove user");
+    }
   };
 
   const whitelistUser = async (username: string) => {
-    await api(`/api/antialt/whitelist/${username}`, { method: "POST" });
-    setFlagged(flagged.filter((a) => a.username !== username));
+    try {
+      await api(`/api/antialt/whitelist/${username}`, { method: "POST" });
+      setFlagged(flagged.filter((a) => a.username !== username));
+      toast.success(`${username} whitelisted`);
+    } catch {
+      toast.error("Failed to whitelist user");
+    }
   };
 
   const updateSettings = async (updates: Partial<AntiAltSettings>) => {
@@ -94,6 +116,25 @@ export function AntiAltPage() {
     if (level === "medium") return { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", progress: "bg-amber-500" };
     return { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", progress: "bg-emerald-500" };
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

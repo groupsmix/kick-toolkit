@@ -17,9 +17,10 @@ interface HeaderProps {
   title: string;
   subtitle?: string;
   user?: KickUser | null;
+  children?: React.ReactNode;
 }
 
-export function Header({ title, subtitle, user }: HeaderProps) {
+export function Header({ title, subtitle, user, children }: HeaderProps) {
   const { logout } = useAuth();
 
   const displayName = user?.name || "Streamer";
@@ -27,14 +28,17 @@ export function Header({ title, subtitle, user }: HeaderProps) {
   const profilePic = user?.profile_picture;
 
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm">
-      <div>
-        <h2 className="text-xl font-bold text-white">{title}</h2>
-        {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+    <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        {children}
+        <div>
+          <h2 className="text-xl font-bold text-white">{title}</h2>
+          {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="relative">
+        <div className="relative hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <Input
             placeholder="Search..."

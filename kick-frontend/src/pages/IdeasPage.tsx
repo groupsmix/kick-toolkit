@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   Lightbulb,
   Sparkles,
@@ -43,34 +44,56 @@ export function IdeasPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    api<Category[]>("/api/ideas/categories").then(setCategories);
-    api<GiveawayIdea[]>("/api/ideas/saved").then(setSavedIdeas);
+    Promise.all([
+      api<Category[]>("/api/ideas/categories").then(setCategories),
+      api<GiveawayIdea[]>("/api/ideas/saved").then(setSavedIdeas),
+    ]).catch((err) => {
+      setError(err.message || "Failed to load ideas data");
+      toast.error("Failed to load ideas data");
+    });
     generateIdeas();
   }, []);
 
   const generateIdeas = async (category?: string) => {
     setLoading(true);
-    const result = await api<GiveawayIdea[]>("/api/ideas/generate", {
-      method: "POST",
-      body: JSON.stringify({ category: category || null, budget: null, audience_size: null, game: null }),
-    });
-    setIdeas(result);
-    setLoading(false);
+    try {
+      const result = await api<GiveawayIdea[]>("/api/ideas/generate", {
+        method: "POST",
+        body: JSON.stringify({ category: category || null, budget: null, audience_size: null, game: null }),
+      });
+      setIdeas(result);
+    } catch {
+      toast.error("Failed to generate ideas");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveIdea = async (idea: GiveawayIdea) => {
-    const saved = await api<GiveawayIdea>("/api/ideas/save", {
-      method: "POST",
-      body: JSON.stringify(idea),
-    });
-    setSavedIdeas([...savedIdeas, saved]);
-    setIdeas(ideas.map((i) => (i.id === idea.id ? { ...i, saved: true } : i)));
+    try {
+      const saved = await api<GiveawayIdea>("/api/ideas/save", {
+        method: "POST",
+        body: JSON.stringify(idea),
+      });
+      setSavedIdeas([...savedIdeas, saved]);
+      setIdeas(ideas.map((i) => (i.id === idea.id ? { ...i, saved: true } : i)));
+      toast.success("Idea saved");
+    } catch {
+      toast.error("Failed to save idea");
+    }
   };
 
   const deleteSavedIdea = async (id: string) => {
-    await api(`/api/ideas/saved/${id}`, { method: "DELETE" });
-    setSavedIdeas(savedIdeas.filter((i) => i.id !== id));
+    try {
+      await api(`/api/ideas/saved/${id}`, { method: "DELETE" });
+      setSavedIdeas(savedIdeas.filter((i) => i.id !== id));
+      toast.success("Idea removed");
+    } catch {
+      toast.error("Failed to remove idea");
+    }
   };
 
   const categoryIcon = (cat: string) => {
@@ -100,6 +123,17 @@ export function IdeasPage() {
     if (level === "medium") return "text-amber-400";
     return "text-zinc-400";
   };
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

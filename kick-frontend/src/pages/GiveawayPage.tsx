@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   Gift,
   Plus,
@@ -57,8 +58,18 @@ export function GiveawayPage() {
   });
   const [manualEntry, setManualEntry] = useState("");
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    api<Giveaway[]>(`/api/giveaway?channel=${CHANNEL}`).then(setGiveaways);
+    setLoading(true);
+    api<Giveaway[]>(`/api/giveaway?channel=${CHANNEL}`)
+      .then(setGiveaways)
+      .catch((err) => {
+        setError(err.message || "Failed to load giveaways");
+        toast.error("Failed to load giveaways");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const createGiveaway = async () => {
@@ -75,17 +86,23 @@ export function GiveawayPage() {
     setGiveaways([gw, ...giveaways]);
     setShowCreate(false);
     setNewGw({ title: "", keyword: "!enter", duration_seconds: 300, max_entries: 0, subscriber_only: false, follower_only: false });
+    toast.success(`Giveaway "${gw.title}" created`);
   };
 
   const addEntry = async (gwId: string) => {
     if (!manualEntry) return;
-    await api(`/api/giveaway/${gwId}/enter`, {
-      method: "POST",
-      body: JSON.stringify({ username: manualEntry }),
-    });
-    const updated = await api<Giveaway>(`/api/giveaway/${gwId}`);
-    setGiveaways(giveaways.map((g) => (g.id === gwId ? updated : g)));
-    setManualEntry("");
+    try {
+      await api(`/api/giveaway/${gwId}/enter`, {
+        method: "POST",
+        body: JSON.stringify({ username: manualEntry }),
+      });
+      const updated = await api<Giveaway>(`/api/giveaway/${gwId}`);
+      setGiveaways(giveaways.map((g) => (g.id === gwId ? updated : g)));
+      toast.success(`${manualEntry} entered`);
+      setManualEntry("");
+    } catch {
+      toast.error("Failed to add entry");
+    }
   };
 
   const rollWinner = async (gwId: string) => {
@@ -126,8 +143,13 @@ export function GiveawayPage() {
   };
 
   const deleteGiveaway = async (gwId: string) => {
-    await api(`/api/giveaway/${gwId}`, { method: "DELETE" });
-    setGiveaways(giveaways.filter((g) => g.id !== gwId));
+    try {
+      await api(`/api/giveaway/${gwId}`, { method: "DELETE" });
+      setGiveaways(giveaways.filter((g) => g.id !== gwId));
+      toast.success("Giveaway deleted");
+    } catch {
+      toast.error("Failed to delete giveaway");
+    }
   };
 
   const statusColor = (status: string) => {
@@ -135,6 +157,25 @@ export function GiveawayPage() {
     if (status === "completed") return "bg-blue-500/10 text-blue-400 border-blue-500/20";
     return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

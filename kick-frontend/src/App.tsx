@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
+import { Toaster } from "sonner";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { BotPage } from "@/pages/BotPage";
 import { ChatLogsPage } from "@/pages/ChatLogsPage";
@@ -12,34 +12,8 @@ import { IdeasPage } from "@/pages/IdeasPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 
-const PAGE_CONFIG: Record<string, { title: string; subtitle: string }> = {
-  dashboard: { title: "Dashboard", subtitle: "Overview of your Kick channel" },
-  bot: { title: "Chat Bot & AI Moderation", subtitle: "Manage commands and auto-moderation" },
-  chatlogs: { title: "Chat Logs", subtitle: "View and search chat history" },
-  giveaway: { title: "Giveaway Roller", subtitle: "Create and manage giveaways" },
-  antialt: { title: "Anti-Alt Detection", subtitle: "Detect and manage alt accounts" },
-  tournament: { title: "Tournament Organizer", subtitle: "Create brackets and manage tournaments" },
-  ideas: { title: "Giveaway Ideas", subtitle: "Get inspiration for your next giveaway" },
-};
-
-function AppContent() {
-  const { isAuthenticated, loading, user } = useAuth();
-  const [currentPage, setCurrentPage] = useState("dashboard");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  const handleAuthComplete = useCallback(() => {
-    window.location.reload();
-  }, []);
-
-  // Check if we're on the auth callback path
-  const isAuthCallback =
-    window.location.pathname === "/auth/callback" ||
-    window.location.search.includes("session_id=") ||
-    (window.location.search.includes("code=") && window.location.search.includes("state="));
-
-  if (isAuthCallback) {
-    return <AuthCallbackPage onComplete={handleAuthComplete} />;
-  }
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
     return (
@@ -53,44 +27,53 @@ function AppContent() {
     return <LoginPage />;
   }
 
-  const pageConfig = PAGE_CONFIG[currentPage] || PAGE_CONFIG.dashboard;
+  return <>{children}</>;
+}
 
-  const renderPage = () => {
-    switch (currentPage) {
-      case "dashboard": return <DashboardPage />;
-      case "bot": return <BotPage />;
-      case "chatlogs": return <ChatLogsPage />;
-      case "giveaway": return <GiveawayPage />;
-      case "antialt": return <AntiAltPage />;
-      case "tournament": return <TournamentPage />;
-      case "ideas": return <IdeasPage />;
-      default: return <DashboardPage />;
-    }
-  };
-
+function AppRoutes() {
   return (
-    <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
-      <Sidebar
-        currentPage={currentPage}
-        onNavigate={setCurrentPage}
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+    <Routes>
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/bot" element={<BotPage />} />
+                <Route path="/chatlogs" element={<ChatLogsPage />} />
+                <Route path="/giveaway" element={<GiveawayPage />} />
+                <Route path="/antialt" element={<AntiAltPage />} />
+                <Route path="/tournament" element={<TournamentPage />} />
+                <Route path="/ideas" element={<IdeasPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </AppLayout>
+          </ProtectedRoute>
+        }
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title={pageConfig.title} subtitle={pageConfig.subtitle} user={user} />
-        <main className="flex-1 overflow-y-auto p-6">
-          {renderPage()}
-        </main>
-      </div>
-    </div>
+    </Routes>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "#18181b",
+              border: "1px solid #27272a",
+              color: "#fff",
+            },
+          }}
+        />
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

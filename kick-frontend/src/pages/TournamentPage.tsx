@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api } from "@/hooks/useApi";
+import { toast } from "sonner";
 import {
   Trophy,
   Plus,
@@ -68,13 +69,23 @@ export function TournamentPage() {
     description: "",
   });
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    api<Tournament[]>(`/api/tournament?channel=${CHANNEL}`).then((data) => {
-      setTournaments(data);
-      if (data.length > 0 && !selectedTournament) {
-        setSelectedTournament(data[0].id);
-      }
-    });
+    setLoading(true);
+    api<Tournament[]>(`/api/tournament?channel=${CHANNEL}`)
+      .then((data) => {
+        setTournaments(data);
+        if (data.length > 0 && !selectedTournament) {
+          setSelectedTournament(data[0].id);
+        }
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load tournaments");
+        toast.error("Failed to load tournaments");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const selected = tournaments.find((t) => t.id === selectedTournament);
@@ -89,6 +100,7 @@ export function TournamentPage() {
     setSelectedTournament(t.id);
     setShowCreate(false);
     setNewTourney({ name: "", game: "", max_participants: 8, format: "single_elimination", keyword: "!join", entry_duration_seconds: 300, description: "" });
+    toast.success(`Tournament "${t.name}" created`);
   };
 
   const registerBatch = async () => {
@@ -124,10 +136,15 @@ export function TournamentPage() {
   };
 
   const deleteTournament = async (id: string) => {
-    await api(`/api/tournament/${id}`, { method: "DELETE" });
-    setTournaments(tournaments.filter((t) => t.id !== id));
-    if (selectedTournament === id) {
-      setSelectedTournament(tournaments.find((t) => t.id !== id)?.id || null);
+    try {
+      await api(`/api/tournament/${id}`, { method: "DELETE" });
+      setTournaments(tournaments.filter((t) => t.id !== id));
+      if (selectedTournament === id) {
+        setSelectedTournament(tournaments.find((t) => t.id !== id)?.id || null);
+      }
+      toast.success("Tournament deleted");
+    } catch {
+      toast.error("Failed to delete tournament");
     }
   };
 
@@ -153,6 +170,25 @@ export function TournamentPage() {
     }
     return rounds;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <p className="text-zinc-400">{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline" className="border-zinc-700 text-zinc-300">
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
