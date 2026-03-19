@@ -664,6 +664,108 @@ CREATE TABLE IF NOT EXISTS overlay_settings (
     updated_at TEXT NOT NULL,
     UNIQUE(channel, overlay_type)
 );
+
+-- ========== Stream Intelligence Dashboard ==========
+CREATE TABLE IF NOT EXISTS stream_intel_sessions (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_minutes INT NOT NULL DEFAULT 0,
+    avg_viewers INT NOT NULL DEFAULT 0,
+    peak_viewers INT NOT NULL DEFAULT 0,
+    new_followers INT NOT NULL DEFAULT 0,
+    messages_count INT NOT NULL DEFAULT 0,
+    unique_chatters INT NOT NULL DEFAULT 0,
+    game TEXT NOT NULL DEFAULT '',
+    stream_score INT NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS weekly_reports (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    week_end TEXT NOT NULL,
+    total_streams INT NOT NULL DEFAULT 0,
+    total_hours FLOAT NOT NULL DEFAULT 0.0,
+    avg_viewers INT NOT NULL DEFAULT 0,
+    peak_viewers INT NOT NULL DEFAULT 0,
+    total_followers_gained INT NOT NULL DEFAULT 0,
+    total_messages INT NOT NULL DEFAULT 0,
+    avg_stream_score INT NOT NULL DEFAULT 0,
+    best_stream_id TEXT,
+    summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    UNIQUE(channel, week_start)
+);
+
+-- ========== Viewer CRM ==========
+CREATE TABLE IF NOT EXISTS viewer_profiles (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    username TEXT NOT NULL,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    total_messages INT NOT NULL DEFAULT 0,
+    total_watch_minutes INT NOT NULL DEFAULT 0,
+    streams_attended INT NOT NULL DEFAULT 0,
+    is_subscriber BOOLEAN NOT NULL DEFAULT FALSE,
+    is_follower BOOLEAN NOT NULL DEFAULT FALSE,
+    is_moderator BOOLEAN NOT NULL DEFAULT FALSE,
+    favorite_games JSONB NOT NULL DEFAULT '[]',
+    segment TEXT NOT NULL DEFAULT 'new',
+    notes TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    UNIQUE(channel, username)
+);
+
+-- ========== AI Post-Stream Debrief ==========
+CREATE TABLE IF NOT EXISTS stream_debriefs (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    session_id TEXT,
+    stream_date TEXT NOT NULL,
+    duration_minutes INT NOT NULL DEFAULT 0,
+    summary TEXT NOT NULL DEFAULT '',
+    highlights JSONB NOT NULL DEFAULT '[]',
+    lowlights JSONB NOT NULL DEFAULT '[]',
+    chat_sentiment_summary TEXT NOT NULL DEFAULT '',
+    top_moments JSONB NOT NULL DEFAULT '[]',
+    recommendations JSONB NOT NULL DEFAULT '[]',
+    viewer_feedback TEXT NOT NULL DEFAULT '',
+    mood_timeline JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
+);
+
+-- ========== Discord Bot Integration ==========
+CREATE TABLE IF NOT EXISTS discord_settings (
+    channel TEXT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    guild_id TEXT NOT NULL DEFAULT '',
+    webhook_url TEXT NOT NULL DEFAULT '',
+    go_live_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+    go_live_channel_id TEXT NOT NULL DEFAULT '',
+    go_live_message TEXT NOT NULL DEFAULT '',
+    chat_bridge_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    chat_bridge_channel_id TEXT NOT NULL DEFAULT '',
+    sub_sync_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    sub_sync_role_id TEXT NOT NULL DEFAULT '',
+    stats_command_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    schedule_command_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS discord_webhook_events (
+    id TEXT PRIMARY KEY,
+    channel TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT,
+    created_at TEXT NOT NULL
+);
 """
 
 

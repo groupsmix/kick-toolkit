@@ -877,3 +877,232 @@ class OverlaySettings(BaseModel):
 class OverlaySettingsUpdate(BaseModel):
     enabled: Optional[bool] = None
     config: Optional[dict] = None
+
+
+# ========== Stream Intelligence Dashboard ==========
+class StreamIntelSession(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    started_at: str
+    ended_at: Optional[str] = None
+    duration_minutes: int = 0
+    avg_viewers: int = 0
+    peak_viewers: int = 0
+    new_followers: int = 0
+    messages_count: int = 0
+    unique_chatters: int = 0
+    game: str = ""
+    stream_score: int = 0  # 0-100
+    created_at: Optional[str] = None
+
+
+class StreamIntelSessionCreate(BaseModel):
+    channel: str
+    started_at: str
+    game: str = ""
+
+
+class StreamIntelSessionUpdate(BaseModel):
+    ended_at: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    avg_viewers: Optional[int] = None
+    peak_viewers: Optional[int] = None
+    new_followers: Optional[int] = None
+    messages_count: Optional[int] = None
+    unique_chatters: Optional[int] = None
+    game: Optional[str] = None
+    stream_score: Optional[int] = None
+
+
+class StreamScoreBreakdown(BaseModel):
+    overall: int = 0
+    viewer_retention: int = 0
+    chat_engagement: int = 0
+    growth: int = 0
+    consistency: int = 0
+
+
+class BestTimeSlot(BaseModel):
+    day_of_week: int
+    hour: int
+    score: float = 0.0
+    avg_viewers: float = 0.0
+    competition_level: str = "medium"  # low, medium, high
+
+
+class GameRecommendation(BaseModel):
+    game: str
+    reason: str
+    growth_potential: str = "medium"  # low, medium, high
+    avg_viewers_in_category: int = 0
+    competition_level: str = "medium"
+
+
+class WeeklyReport(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    week_start: str
+    week_end: str
+    total_streams: int = 0
+    total_hours: float = 0.0
+    avg_viewers: int = 0
+    peak_viewers: int = 0
+    total_followers_gained: int = 0
+    total_messages: int = 0
+    avg_stream_score: int = 0
+    best_stream_id: Optional[str] = None
+    summary: str = ""
+    created_at: Optional[str] = None
+
+
+class GrowthMetrics(BaseModel):
+    channel: str
+    period: str  # "7d", "30d", "90d"
+    viewer_trend: float = 0.0  # percentage change
+    follower_trend: float = 0.0
+    chat_trend: float = 0.0
+    stream_count: int = 0
+    avg_stream_score: int = 0
+
+
+# ========== Viewer CRM ==========
+class ViewerProfile(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    username: str
+    first_seen: str
+    last_seen: str
+    total_messages: int = 0
+    total_watch_minutes: int = 0
+    streams_attended: int = 0
+    is_subscriber: bool = False
+    is_follower: bool = False
+    is_moderator: bool = False
+    favorite_games: list[str] = []
+    segment: str = "new"  # new, regular, superfan, at_risk, churned
+    notes: str = ""
+    updated_at: Optional[str] = None
+
+
+class ViewerProfileUpdate(BaseModel):
+    notes: Optional[str] = None
+    segment: Optional[str] = None
+    is_subscriber: Optional[bool] = None
+    is_follower: Optional[bool] = None
+    is_moderator: Optional[bool] = None
+
+
+class ViewerSegmentSummary(BaseModel):
+    segment: str
+    count: int = 0
+    avg_messages: float = 0.0
+    avg_watch_minutes: float = 0.0
+
+
+class ViewerJourney(BaseModel):
+    username: str
+    channel: str
+    first_seen: str
+    last_seen: str
+    milestones: list[dict] = []  # [{"date": "...", "event": "first_message"}, ...]
+    activity_timeline: list[dict] = []  # [{"date": "...", "messages": 5, "minutes": 120}]
+
+
+class ChurnRisk(BaseModel):
+    username: str
+    channel: str
+    last_seen: str
+    days_absent: int = 0
+    previous_frequency: str = "weekly"  # daily, weekly, occasional
+    risk_level: str = "medium"  # low, medium, high
+    total_messages: int = 0
+    streams_attended: int = 0
+
+
+class ShoutoutSuggestion(BaseModel):
+    username: str
+    reason: str
+    streams_attended: int = 0
+    total_messages: int = 0
+    last_acknowledged: Optional[str] = None
+
+
+# ========== AI Post-Stream Debrief ==========
+class StreamDebrief(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    session_id: Optional[str] = None
+    stream_date: str
+    duration_minutes: int = 0
+    summary: str = ""
+    highlights: list[str] = []
+    lowlights: list[str] = []
+    chat_sentiment_summary: str = ""
+    top_moments: list[dict] = []  # [{"timestamp_minutes": 45, "description": "Chat went wild", "intensity": 0.9}]
+    recommendations: list[str] = []
+    viewer_feedback: str = ""
+    mood_timeline: list[dict] = []  # [{"minute": 0, "sentiment": 0.7}, ...]
+    status: str = "pending"  # pending, analyzing, completed, failed
+    created_at: Optional[str] = None
+
+
+class DebriefRequest(BaseModel):
+    channel: str
+    session_id: Optional[str] = None
+    stream_date: Optional[str] = None
+
+
+class DebriefInsight(BaseModel):
+    category: str  # "engagement", "content", "timing", "growth"
+    title: str
+    description: str
+    priority: str = "medium"  # low, medium, high
+    actionable: bool = True
+
+
+# ========== Discord Bot Integration ==========
+class DiscordSettings(BaseModel):
+    channel: str
+    enabled: bool = True
+    guild_id: str = ""
+    webhook_url: str = ""
+    go_live_notifications: bool = True
+    go_live_channel_id: str = ""
+    go_live_message: str = "🔴 {streamer} is now live on Kick! Playing {game}\n{url}"
+    chat_bridge_enabled: bool = False
+    chat_bridge_channel_id: str = ""
+    sub_sync_enabled: bool = False
+    sub_sync_role_id: str = ""
+    stats_command_enabled: bool = True
+    schedule_command_enabled: bool = True
+    updated_at: Optional[str] = None
+
+
+class DiscordSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    guild_id: Optional[str] = None
+    webhook_url: Optional[str] = None
+    go_live_notifications: Optional[bool] = None
+    go_live_channel_id: Optional[str] = None
+    go_live_message: Optional[str] = None
+    chat_bridge_enabled: Optional[bool] = None
+    chat_bridge_channel_id: Optional[str] = None
+    sub_sync_enabled: Optional[bool] = None
+    sub_sync_role_id: Optional[str] = None
+    stats_command_enabled: Optional[bool] = None
+    schedule_command_enabled: Optional[bool] = None
+
+
+class DiscordWebhookEvent(BaseModel):
+    id: Optional[str] = None
+    channel: str
+    event_type: str  # "go_live", "new_follow", "new_sub", "chat_highlight"
+    payload: dict = {}
+    status: str = "pending"  # pending, sent, failed
+    error: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class DiscordWebhookTest(BaseModel):
+    channel: str
+    event_type: str = "go_live"

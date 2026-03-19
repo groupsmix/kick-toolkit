@@ -21,6 +21,9 @@ import {
   Music,
   Calendar,
   Monitor,
+  Heart,
+  Brain,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -49,6 +52,10 @@ const navItems = [
   { path: "/songs", label: "Song Requests", icon: Music },
   { path: "/schedule", label: "Stream Schedule", icon: Calendar },
   { path: "/overlays", label: "OBS Overlays", icon: Monitor },
+  { path: "/intelligence", label: "Stream Intelligence", icon: BarChart3 },
+  { path: "/crm", label: "Viewer CRM", icon: Heart },
+  { path: "/debrief", label: "AI Debrief", icon: Brain },
+  { path: "/discord", label: "Discord Bot", icon: MessageCircle },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {

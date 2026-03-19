@@ -26,6 +26,10 @@ import { ChatOverlay } from "@/pages/overlays/ChatOverlay";
 import { AlertOverlay } from "@/pages/overlays/AlertOverlay";
 import { GiveawayOverlay } from "@/pages/overlays/GiveawayOverlay";
 import { NowPlayingOverlay } from "@/pages/overlays/NowPlayingOverlay";
+import { StreamIntelligencePage } from "@/pages/StreamIntelligencePage";
+import { ViewerCRMPage } from "@/pages/ViewerCRMPage";
+import { DebriefPage } from "@/pages/DebriefPage";
+import { DiscordBotPage } from "@/pages/DiscordBotPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -253,6 +257,47 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <OverlaysPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/intelligence"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <StreamIntelligencePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crm"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <ViewerCRMPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/debrief"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <DebriefPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/discord"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <DiscordBotPage />
             </AppLayout>
           </ProtectedRoute>
         }
