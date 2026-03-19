@@ -26,6 +26,7 @@ from app.routers.songs import router as songs_router
 from app.routers.schedule import router as schedule_router
 from app.routers.profiles import router as profiles_router
 from app.routers.overlays import router as overlays_router
+from app.routers.marketplace import router as marketplace_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -112,6 +113,7 @@ app.include_router(songs_router)
 app.include_router(schedule_router)
 app.include_router(profiles_router)
 app.include_router(overlays_router)
+app.include_router(marketplace_router)
 
 
 @app.get("/healthz")

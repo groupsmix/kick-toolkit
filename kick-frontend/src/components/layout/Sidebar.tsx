@@ -21,6 +21,7 @@ import {
   Music,
   Calendar,
   Monitor,
+  Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -49,6 +50,7 @@ const navItems = [
   { path: "/songs", label: "Song Requests", icon: Music },
   { path: "/schedule", label: "Stream Schedule", icon: Calendar },
   { path: "/overlays", label: "OBS Overlays", icon: Monitor },
+  { path: "/marketplace", label: "Marketplace", icon: Store },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {

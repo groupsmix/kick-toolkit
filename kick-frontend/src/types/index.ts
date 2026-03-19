@@ -50,3 +50,91 @@ export interface SubscriptionResponse {
   plan: SubscriptionPlan;
   usage: Record<string, number>;
 }
+
+/** Marketplace seller profile. */
+export interface SellerProfile {
+  id: string;
+  user_id: string;
+  display_name: string;
+  bio: string;
+  avatar_url: string | null;
+  website: string | null;
+  total_sales: number;
+  total_revenue: number;
+  rating_avg: number;
+  rating_count: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Marketplace item listing. */
+export interface MarketplaceItem {
+  id: string;
+  seller_id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  currency: string;
+  preview_url: string | null;
+  download_url: string | null;
+  thumbnail_url: string | null;
+  tags: string[];
+  status: string;
+  download_count: number;
+  rating_avg: number;
+  rating_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Marketplace purchase record. */
+export interface MarketplacePurchase {
+  id: string;
+  item_id: string;
+  buyer_user_id: string;
+  seller_id: string;
+  price_paid: number;
+  platform_fee: number;
+  seller_payout: number;
+  status: string;
+  payment_reference: string | null;
+  created_at: string;
+  title?: string;
+  category?: string;
+  thumbnail_url?: string | null;
+  download_url?: string | null;
+}
+
+/** Marketplace review. */
+export interface MarketplaceReview {
+  id: string;
+  item_id: string;
+  user_id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Seller revenue analytics. */
+export interface SellerRevenueAnalytics {
+  seller_id: string;
+  total_revenue: number;
+  total_sales: number;
+  platform_fees: number;
+  net_revenue: number;
+  pending_payout: number;
+  items_listed: number;
+  avg_item_rating: number;
+  monthly_revenue: Array<{ month: string; revenue: number }>;
+  top_items: Array<{
+    id: string;
+    title: string;
+    category: string;
+    price: number;
+    download_count: number;
+    rating_avg: number;
+  }>;
+}

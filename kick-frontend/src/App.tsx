@@ -26,6 +26,7 @@ import { ChatOverlay } from "@/pages/overlays/ChatOverlay";
 import { AlertOverlay } from "@/pages/overlays/AlertOverlay";
 import { GiveawayOverlay } from "@/pages/overlays/GiveawayOverlay";
 import { NowPlayingOverlay } from "@/pages/overlays/NowPlayingOverlay";
+import { MarketplacePage } from "@/pages/MarketplacePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -253,6 +254,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <OverlaysPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/marketplace"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <MarketplacePage />
             </AppLayout>
           </ProtectedRoute>
         }
