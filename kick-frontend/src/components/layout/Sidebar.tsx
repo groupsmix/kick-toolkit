@@ -17,6 +17,7 @@ import {
   Scissors,
   Map,
   Building2,
+  Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -41,6 +42,7 @@ const navItems = [
   { path: "/clips", label: "AI Clip Pipeline", icon: Scissors, premium: true },
   { path: "/heatmap", label: "Viewer Heatmap", icon: Map, premium: true },
   { path: "/whitelabel", label: "White-Label", icon: Building2, premium: true },
+  { path: "/marketplace", label: "Marketplace", icon: Store },
 ];
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {

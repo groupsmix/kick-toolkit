@@ -547,6 +547,82 @@ CREATE TABLE IF NOT EXISTS org_settings (
     billing_email TEXT,
     updated_at TEXT NOT NULL
 );
+
+-- ========== Creator Economy Marketplace ==========
+CREATE TABLE IF NOT EXISTS seller_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    bio TEXT NOT NULL DEFAULT '',
+    avatar_url TEXT,
+    website TEXT,
+    total_sales INT NOT NULL DEFAULT 0,
+    total_revenue FLOAT NOT NULL DEFAULT 0.0,
+    rating_avg FLOAT NOT NULL DEFAULT 0.0,
+    rating_count INT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS marketplace_items (
+    id TEXT PRIMARY KEY,
+    seller_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT 'overlay',
+    price FLOAT NOT NULL DEFAULT 0.0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    preview_url TEXT,
+    download_url TEXT,
+    thumbnail_url TEXT,
+    tags JSONB NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'draft',
+    download_count INT NOT NULL DEFAULT 0,
+    rating_avg FLOAT NOT NULL DEFAULT 0.0,
+    rating_count INT NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS marketplace_purchases (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    buyer_user_id TEXT NOT NULL,
+    seller_id TEXT NOT NULL,
+    price_paid FLOAT NOT NULL DEFAULT 0.0,
+    platform_fee FLOAT NOT NULL DEFAULT 0.0,
+    seller_payout FLOAT NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'completed',
+    payment_reference TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(item_id, buyer_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS marketplace_reviews (
+    id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    rating INT NOT NULL DEFAULT 5,
+    comment TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(item_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS seller_payouts (
+    id TEXT PRIMARY KEY,
+    seller_id TEXT NOT NULL,
+    amount FLOAT NOT NULL DEFAULT 0.0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    status TEXT NOT NULL DEFAULT 'pending',
+    payment_method TEXT NOT NULL DEFAULT 'stripe',
+    payment_reference TEXT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    paid_at TEXT
+);
 """
 
 
@@ -731,5 +807,48 @@ async def seed_demo_data():
              "Set up tiered rewards for subscription milestones. At 50 subs do a challenge, at 100 subs give away a game, at 200 subs do a 24hr stream.",
              "experience", "$50-200", "high", json.dumps(["Subscription tracking", "Overlay setup"]), True),
         )
+
+        # Marketplace seller profiles
+        seller1_id = _generate_id()
+        seller2_id = _generate_id()
+        await conn.execute(
+            """INSERT INTO seller_profiles
+               (id, user_id, display_name, bio, avatar_url, website,
+                total_sales, total_revenue, rating_avg, rating_count, status, created_at, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (seller1_id, "seller_user_1", "OverlayMaster", "Premium overlays and alert packs for Kick streamers.",
+             None, "https://overlaymaster.design", 142, 2840.0, 4.8, 89, "active", now, now),
+        )
+        await conn.execute(
+            """INSERT INTO seller_profiles
+               (id, user_id, display_name, bio, avatar_url, website,
+                total_sales, total_revenue, rating_avg, rating_count, status, created_at, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            (seller2_id, "seller_user_2", "BotPresets Pro", "Custom chatbot configurations and widget skins.",
+             None, None, 67, 670.0, 4.5, 34, "active", now, now),
+        )
+
+        # Marketplace items
+        mp_items = [
+            (seller1_id, "Neon Pulse Overlay Pack", "Complete streaming overlay set with animated alerts, webcam frames, and scene transitions. Neon cyberpunk theme.",
+             "overlay", 14.99, json.dumps(["neon", "cyberpunk", "animated", "overlay"]), 87, 4.9, 52),
+            (seller1_id, "Hype Alert Bundle", "Animated alert pack with subscriber, follower, and raid alerts. Includes sound effects.",
+             "alert_pack", 9.99, json.dumps(["alerts", "animated", "sound", "subscriber"]), 55, 4.7, 37),
+            (seller2_id, "Auto-Mod Command Pack", "Pre-configured chatbot commands for moderation, games, and engagement. 50+ commands included.",
+             "chatbot_preset", 4.99, json.dumps(["chatbot", "commands", "moderation", "engagement"]), 45, 4.6, 22),
+            (seller2_id, "Minimal Dark Widget Skin", "Clean dark-themed widget skin pack for chat, events, and goals.",
+             "widget_skin", 7.99, json.dumps(["widget", "dark", "minimal", "clean"]), 22, 4.3, 12),
+            (seller1_id, "Retro Arcade Overlay", "8-bit retro gaming overlay with pixel art frames and chiptune alerts.",
+             "overlay", 12.99, json.dumps(["retro", "arcade", "pixel", "8bit"]), 0, 0.0, 0),
+        ]
+        for s_id, title, desc, cat, price, tags, downloads, rating, r_count in mp_items:
+            await conn.execute(
+                """INSERT INTO marketplace_items
+                   (id, seller_id, title, description, category, price, tags,
+                    status, download_count, rating_avg, rating_count, created_at, updated_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,'published',%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (_generate_id(), s_id, title, desc, cat, price, tags,
+                 downloads, rating, r_count, now, now),
+            )
 
         await conn.commit()

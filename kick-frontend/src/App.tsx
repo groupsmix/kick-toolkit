@@ -17,6 +17,7 @@ import { StreamCoachPage } from "@/pages/StreamCoachPage";
 import { ClipsPage } from "@/pages/ClipsPage";
 import { HeatmapPage } from "@/pages/HeatmapPage";
 import { WhiteLabelPage } from "@/pages/WhiteLabelPage";
+import { MarketplacePage } from "@/pages/MarketplacePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { AuthCallbackPage } from "@/pages/AuthCallbackPage";
 import { LandingPage } from "@/pages/LandingPage";
@@ -204,6 +205,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <AppLayout>
               <WhiteLabelPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/marketplace"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <MarketplacePage />
             </AppLayout>
           </ProtectedRoute>
         }
