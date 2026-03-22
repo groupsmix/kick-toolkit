@@ -36,6 +36,7 @@ from app.routers.highlights import router as highlights_router
 from app.routers.polls import router as polls_router
 from app.routers.predictions import router as predictions_router
 from app.routers.translation import router as translation_router
+from app.routers.activity import router as activity_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
@@ -140,6 +141,7 @@ app.include_router(highlights_router)
 app.include_router(polls_router)
 app.include_router(predictions_router)
 app.include_router(translation_router)
+app.include_router(activity_router)
 
 
 @app.get("/healthz")

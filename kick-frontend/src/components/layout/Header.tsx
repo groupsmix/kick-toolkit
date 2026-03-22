@@ -1,12 +1,65 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Search, LogOut, X } from "lucide-react";
+import { Bell, Search, LogOut, X, ShieldAlert, Gift, Trophy, Bot, Info } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import type { KickUser } from "@/types";
+
+interface Notification {
+  id: string;
+  type: "moderation" | "giveaway" | "tournament" | "bot" | "info";
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+}
+
+function getStoredNotifications(): Notification[] {
+  try {
+    const stored = localStorage.getItem("kicktools_notifications");
+    if (stored) return JSON.parse(stored);
+  } catch {
+    // ignore parse errors
+  }
+  // Default welcome notifications for new users
+  return [
+    {
+      id: "welcome-1",
+      type: "info",
+      title: "Welcome to KickTools!",
+      message: "Get started by setting up your first bot command.",
+      timestamp: new Date().toISOString(),
+      read: false,
+    },
+    {
+      id: "welcome-2",
+      type: "info",
+      title: "Tip: Check Settings",
+      message: "Configure your notification preferences in Settings.",
+      timestamp: new Date().toISOString(),
+      read: false,
+    },
+  ];
+}
+
+const notificationIcons: Record<Notification["type"], React.ElementType> = {
+  moderation: ShieldAlert,
+  giveaway: Gift,
+  tournament: Trophy,
+  bot: Bot,
+  info: Info,
+};
+
+const notificationColors: Record<Notification["type"], string> = {
+  moderation: "text-red-400",
+  giveaway: "text-emerald-400",
+  tournament: "text-amber-400",
+  bot: "text-cyan-400",
+  info: "text-blue-400",
+};
 
 interface HeaderProps {
   title: string;
@@ -25,6 +78,10 @@ const PAGE_ROUTES: Record<string, string> = {
   alt: "/antialt",
   ideas: "/ideas",
   dashboard: "/",
+  settings: "/settings",
+  analytics: "/analytics",
+  polls: "/polls",
+  schedule: "/schedule",
 };
 
 export function Header({ title, subtitle, user, children }: HeaderProps) {
@@ -32,6 +89,26 @@ export function Header({ title, subtitle, user, children }: HeaderProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>(getStoredNotifications);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  useEffect(() => {
+    localStorage.setItem("kicktools_notifications", JSON.stringify(notifications));
+  }, [notifications]);
+
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const dismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const clearAll = () => {
+    setNotifications([]);
+    setShowNotifications(false);
+  };
 
   const displayName = user?.name || "Streamer";
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -52,6 +129,16 @@ export function Header({ title, subtitle, user, children }: HeaderProps) {
     },
     [searchQuery, navigate],
   );
+
+  const formatNotifTime = (ts: string) => {
+    const diff = Date.now() - new Date(ts).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  };
 
   return (
     <header className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm">
@@ -79,22 +166,70 @@ export function Header({ title, subtitle, user, children }: HeaderProps) {
             variant="ghost"
             size="icon"
             className="relative text-zinc-400 hover:text-white"
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              if (!showNotifications) markAllRead();
+            }}
           >
             <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[10px] font-bold text-white flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </Button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-full mt-2 w-72 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50">
+            <div className="absolute right-0 top-full mt-2 w-80 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-50">
               <div className="flex items-center justify-between p-3 border-b border-zinc-800">
                 <span className="text-sm font-medium text-white">Notifications</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400" onClick={() => setShowNotifications(false)}>
-                  <X className="w-3 h-3" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  {notifications.length > 0 && (
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] text-zinc-500 hover:text-zinc-300 px-2" onClick={clearAll}>
+                      Clear all
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400" onClick={() => setShowNotifications(false)}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
               </div>
-              <div className="p-4 text-center">
-                <p className="text-xs text-zinc-500">No new notifications</p>
-              </div>
+              {notifications.length === 0 ? (
+                <div className="p-6 text-center">
+                  <Bell className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
+                  <p className="text-xs text-zinc-500">No notifications</p>
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.map((notif) => {
+                    const Icon = notificationIcons[notif.type];
+                    const color = notificationColors[notif.type];
+                    return (
+                      <div
+                        key={notif.id}
+                        className={`flex items-start gap-3 p-3 border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
+                          !notif.read ? "bg-zinc-800/20" : ""
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${color}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-white">{notif.title}</p>
+                          <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                          <p className="text-[10px] text-zinc-600 mt-1">{formatNotifTime(notif.timestamp)}</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-zinc-600 hover:text-zinc-400 flex-shrink-0"
+                          onClick={() => dismissNotification(notif.id)}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

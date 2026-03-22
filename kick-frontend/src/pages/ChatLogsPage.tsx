@@ -15,6 +15,7 @@ import {
   User,
   Clock,
   BarChart3,
+  Download,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -83,6 +84,30 @@ export function ChatLogsPage() {
   const formatTime = (ts: string) => {
     const date = new Date(ts);
     return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const exportCSV = () => {
+    if (logs.length === 0) {
+      toast.error("No logs to export");
+      return;
+    }
+    const headers = ["timestamp", "username", "message", "flagged", "flag_reason"];
+    const rows = logs.map((log) => [
+      log.timestamp,
+      log.username,
+      `"${log.message.replace(/"/g, '""')}"`,
+      log.flagged ? "yes" : "no",
+      log.flag_reason || "",
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `chat-logs-${channel}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${logs.length} log entries`);
   };
 
   if (loading) {
@@ -182,6 +207,15 @@ export function ChatLogsPage() {
                     Clear Filter: {selectedUser}
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportCSV}
+                  className="border-zinc-700 text-zinc-400 hover:text-white"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  CSV
+                </Button>
               </div>
             </CardContent>
           </Card>

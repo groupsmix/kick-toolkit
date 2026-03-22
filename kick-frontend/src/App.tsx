@@ -41,6 +41,8 @@ const HighlightsPage = lazy(() => import("@/pages/HighlightsPage").then(m => ({ 
 const PollsPage = lazy(() => import("@/pages/PollsPage").then(m => ({ default: m.PollsPage })));
 const PredictionsPage = lazy(() => import("@/pages/PredictionsPage").then(m => ({ default: m.PredictionsPage })));
 const TranslationPage = lazy(() => import("@/pages/TranslationPage").then(m => ({ default: m.TranslationPage })));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const ActivityPage = lazy(() => import("@/pages/ActivityPage").then(m => ({ default: m.ActivityPage })));
 const PricingPage = lazy(() => import("@/pages/PricingPage").then(m => ({ default: m.PricingPage })));
 const TermsPage = lazy(() => import("@/pages/TermsPage").then(m => ({ default: m.TermsPage })));
 const PrivacyPage = lazy(() => import("@/pages/PrivacyPage").then(m => ({ default: m.PrivacyPage })));
@@ -133,6 +135,8 @@ const protectedRoutes: { path: string; Component: React.LazyExoticComponent<Reac
   { path: "/polls", Component: PollsPage },
   { path: "/predictions", Component: PredictionsPage },
   { path: "/translation", Component: TranslationPage },
+  { path: "/settings", Component: SettingsPage },
+  { path: "/activity", Component: ActivityPage },
 ];
 
 function AppRoutes() {

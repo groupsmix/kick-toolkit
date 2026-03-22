@@ -21,6 +21,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface GiveawayEntry {
   username: string;
@@ -58,6 +59,7 @@ export function GiveawayPage() {
     follower_only: false,
   });
   const [manualEntry, setManualEntry] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -346,7 +348,7 @@ export function GiveawayPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => deleteGiveaway(gw.id)}
+                      onClick={() => setConfirmDelete(gw.id)}
                       className="text-zinc-500 hover:text-red-400"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -427,6 +429,15 @@ export function GiveawayPage() {
           </Card>
         ))}
       </div>
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}
+        title="Delete Giveaway"
+        description="Are you sure you want to delete this giveaway? This action cannot be undone and all entries will be lost."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => { if (confirmDelete) deleteGiveaway(confirmDelete); }}
+      />
     </div>
   );
 }

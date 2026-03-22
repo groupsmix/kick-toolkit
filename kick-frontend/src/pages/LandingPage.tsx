@@ -12,7 +12,6 @@ import {
   Lightbulb,
   Check,
   ArrowRight,
-  Star,
   Users,
   Shield,
   ExternalLink,
@@ -78,9 +77,9 @@ const plans = [
     description: "Get started with the basics",
     features: [
       "Dashboard overview",
-      "5 bot commands",
-      "100 chat log entries",
-      "1 active giveaway",
+      "20 bot commands",
+      "1,000 chat log entries",
+      "3 active giveaways",
       "Community support",
     ],
     cta: "Get Started",
@@ -125,27 +124,21 @@ const plans = [
   },
 ];
 
-const testimonials = [
+const howItWorks = [
   {
-    name: "StreamerAlex",
-    role: "Kick Partner • 15K followers",
-    quote:
-      "KickTools completely transformed how I manage my stream. The AI moderation catches toxic users before I even see them.",
-    rating: 5,
+    step: "1",
+    title: "Connect Your Kick Account",
+    description: "Sign in with Kick OAuth in one click. We never store your password.",
   },
   {
-    name: "GameQueenMia",
-    role: "Variety Streamer • 8K followers",
-    quote:
-      "The giveaway roller is amazing! My viewers love the animated rolling and it's so easy to set up. Engagement went up 40%.",
-    rating: 5,
+    step: "2",
+    title: "Configure Your Tools",
+    description: "Set up bot commands, moderation rules, and giveaway preferences from your dashboard.",
   },
   {
-    name: "ProGamerDan",
-    role: "Esports Streamer • 22K followers",
-    quote:
-      "The tournament organizer saved me hours of work. Auto-brackets, match management — it just works perfectly.",
-    rating: 5,
+    step: "3",
+    title: "Go Live & Relax",
+    description: "Your toolkit works in the background — moderating chat, running giveaways, and tracking analytics automatically.",
   },
 ];
 
@@ -181,10 +174,10 @@ export function LandingPage() {
                 Pricing
               </a>
               <a
-                href="#testimonials"
+                href="#preview"
                 className="text-sm text-zinc-400 hover:text-white transition-colors"
               >
-                Testimonials
+                Preview
               </a>
               <button
                 onClick={() => navigate("/terms")}
@@ -266,26 +259,27 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Stats Bar */}
-      <section className="py-12 border-y border-zinc-800/50 bg-zinc-900/30">
+      {/* How It Works */}
+      <section className="py-16 border-y border-zinc-800/50 bg-zinc-900/30">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-            <div>
-              <p className="text-3xl font-bold text-white">1,200+</p>
-              <p className="text-sm text-zinc-500 mt-1">Active Streamers</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-white">5M+</p>
-              <p className="text-sm text-zinc-500 mt-1">Messages Moderated</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-white">50K+</p>
-              <p className="text-sm text-zinc-500 mt-1">Giveaways Hosted</p>
-            </div>
-            <div>
-              <p className="text-3xl font-bold text-white">99.9%</p>
-              <p className="text-sm text-zinc-500 mt-1">Uptime</p>
-            </div>
+          <div className="text-center mb-12">
+            <Badge className="mb-4 bg-zinc-700/50 text-zinc-300 border-zinc-600/30">
+              How It Works
+            </Badge>
+            <h2 className="text-2xl sm:text-3xl font-bold">
+              Up and Running in Minutes
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {howItWorks.map((item) => (
+              <div key={item.step} className="text-center">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                  <span className="text-lg font-bold text-emerald-400">{item.step}</span>
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">{item.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -410,48 +404,95 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 px-4 sm:px-6 lg:px-8">
+      {/* Product Preview Section */}
+      <section id="preview" className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <Badge className="mb-4 bg-purple-500/10 text-purple-400 border-purple-500/20">
-              Testimonials
+              Product Preview
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-bold">
-              Loved by Streamers
+              See What You Get
             </h2>
             <p className="mt-4 text-zinc-400 max-w-xl mx-auto">
-              See what Kick streamers are saying about KickTools.
+              A powerful dashboard packed with tools to manage and grow your Kick stream.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {testimonials.map((testimonial) => (
-              <Card
-                key={testimonial.name}
-                className="bg-zinc-900/50 border-zinc-800"
-              >
-                <CardContent className="p-6">
-                  <div className="flex gap-1 mb-4">
-                    {Array.from({ length: testimonial.rating }).map((_, i) => (
-                      <Star
-                        key={i}
-                        className="w-4 h-4 text-amber-400 fill-amber-400"
-                      />
-                    ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Bot className="w-5 h-5 text-cyan-400" />
+                  <h3 className="text-lg font-semibold text-white">Smart Chat Bot</h3>
+                </div>
+                <p className="text-sm text-zinc-400 mb-4">Custom commands with variables, timed messages, welcome messages, shoutouts, and AI-powered moderation — all configurable from one panel.</p>
+                <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700/50 space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <code className="text-emerald-400 font-mono">!socials</code>
+                    <span className="text-zinc-500">&rarr;</span>
+                    <span className="text-zinc-300">Follow me on Twitter and Instagram!</span>
                   </div>
-                  <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                    "{testimonial.quote}"
-                  </p>
-                  <div>
-                    <p className="text-sm font-semibold text-white">
-                      {testimonial.name}
-                    </p>
-                    <p className="text-xs text-zinc-500">{testimonial.role}</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <code className="text-emerald-400 font-mono">!lurk</code>
+                    <span className="text-zinc-500">&rarr;</span>
+                    <span className="text-zinc-300">{'{username}'} is now lurking!</span>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Gift className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-lg font-semibold text-white">Giveaway Roller</h3>
+                </div>
+                <p className="text-sm text-zinc-400 mb-4">Keyword-based entry, animated winner selection, sub/follower-only modes, manual entries, and one-click rerolls.</p>
+                <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700/50 text-center">
+                  <p className="text-xs text-zinc-500 mb-1">Winner</p>
+                  <p className="text-2xl font-bold text-emerald-400 animate-pulse">viewer_jenny</p>
+                  <p className="text-xs text-zinc-600 mt-2">5 entries &middot; Keyword: !enter</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <ShieldAlert className="w-5 h-5 text-red-400" />
+                  <h3 className="text-lg font-semibold text-white">AI Moderation</h3>
+                </div>
+                <p className="text-sm text-zinc-400 mb-4">AI toxicity detection, spam filters, caps lock filters, link filters, and banned word lists — all working together automatically.</p>
+                <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700/50 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-300">"FREE VIEWERS AT bit.ly/scam"</span>
+                    <Badge className="bg-red-500/20 text-red-400 border-red-500/20 text-[10px]">Blocked</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-300">"GG great play!"</span>
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/20 text-[10px]">Clean</Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-lg font-semibold text-white">Tournament Organizer</h3>
+                </div>
+                <p className="text-sm text-zinc-400 mb-4">Auto-bracket generation, keyword registration, match management, and live bracket visualization.</p>
+                <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700/50">
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="text-white font-medium">Friday Night Fights</span>
+                    <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/20 text-[10px]">Round 2</Badge>
+                  </div>
+                  <p className="text-xs text-zinc-500">8 players &middot; Single elimination &middot; Street Fighter 6</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>

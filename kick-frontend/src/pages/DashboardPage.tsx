@@ -17,12 +17,51 @@ import {
   Activity,
   Crown,
   ArrowUpRight,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useState, useEffect } from "react";
+
+interface OnboardingStep {
+  id: string;
+  label: string;
+  description: string;
+  path: string;
+  check: (stats: DashboardStats) => boolean;
+}
+
+const onboardingSteps: OnboardingStep[] = [
+  {
+    id: "bot",
+    label: "Set up your first bot command",
+    description: "Create a custom chat command for your viewers",
+    path: "/bot",
+    check: (stats) => stats.total_commands > 0,
+  },
+  {
+    id: "giveaway",
+    label: "Create a giveaway",
+    description: "Run your first giveaway to engage your audience",
+    path: "/giveaway",
+    check: (stats) => stats.active_giveaways > 0,
+  },
+  {
+    id: "moderation",
+    label: "Review moderation settings",
+    description: "Configure AI moderation to keep your chat clean",
+    path: "/bot",
+    check: (stats) => stats.moderation_rate > 0,
+  },
+];
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const [onboardingDismissed, setOnboardingDismissed] = useState(() =>
+    localStorage.getItem("onboarding_dismissed") === "true"
+  );
 
   const { data: stats, isLoading, error, refetch } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats"],
@@ -39,6 +78,21 @@ export function DashboardPage() {
   const planId = subData?.plan?.id || "free";
   const planLimits = subData?.plan?.limits || {};
   const usage = subData?.usage || {};
+
+  const completedSteps = stats
+    ? onboardingSteps.filter((step) => step.check(stats)).length
+    : 0;
+  const allStepsComplete = completedSteps === onboardingSteps.length;
+
+  useEffect(() => {
+    if (allStepsComplete && !onboardingDismissed) {
+      const timer = setTimeout(() => {
+        setOnboardingDismissed(true);
+        localStorage.setItem("onboarding_dismissed", "true");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [allStepsComplete, onboardingDismissed]);
 
   if (isLoading) {
     return (
@@ -166,6 +220,64 @@ export function DashboardPage() {
           <TrendingUp className="w-32 h-32 text-emerald-500" />
         </div>
       </div>
+
+      {/* Onboarding Checklist */}
+      {!onboardingDismissed && stats && (
+        <Card className="bg-zinc-900/50 border-emerald-500/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-white flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                Getting Started &mdash; {completedSteps}/{onboardingSteps.length} complete
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-zinc-500 hover:text-zinc-300 text-xs"
+                onClick={() => {
+                  setOnboardingDismissed(true);
+                  localStorage.setItem("onboarding_dismissed", "true");
+                }}
+              >
+                Dismiss
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {onboardingSteps.map((step) => {
+                const done = step.check(stats);
+                return (
+                  <button
+                    key={step.id}
+                    onClick={() => !done && navigate(step.path)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors ${
+                      done
+                        ? "bg-emerald-500/5 border border-emerald-500/10"
+                        : "bg-zinc-800/50 border border-zinc-700/50 hover:border-emerald-500/30 cursor-pointer"
+                    }`}
+                  >
+                    {done ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-zinc-600 flex-shrink-0" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-medium ${done ? "text-emerald-400 line-through" : "text-white"}`}>
+                        {step.label}
+                      </p>
+                      <p className="text-xs text-zinc-500">{step.description}</p>
+                    </div>
+                    {!done && (
+                      <ArrowUpRight className="w-4 h-4 text-zinc-500 ml-auto flex-shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Usage Limits (for free plan) */}
       {planId === "free" && (

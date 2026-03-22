@@ -26,6 +26,7 @@ import {
   Eye,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface BotCommand {
   name: string;
@@ -112,6 +113,9 @@ export function BotPage() {
 
   const [previewCmd, setPreviewCmd] = useState("");
   const [previewResult, setPreviewResult] = useState("");
+
+  const [confirmDeleteCmd, setConfirmDeleteCmd] = useState<string | null>(null);
+  const [confirmDeleteTimed, setConfirmDeleteTimed] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -422,7 +426,7 @@ export function BotPage() {
                 >
                   <option value="">Select a command...</option>
                   {commands.map((c) => (
-                    <option key={c.name} value={c.name}>!{c.name}</option>
+                    <option key={c.name} value={c.name}>{botConfig?.prefix || "!"}{c.name}</option>
                   ))}
                 </select>
                 <Button onClick={previewCommand} className="bg-emerald-500 hover:bg-emerald-600 text-black" disabled={!previewCmd}>
@@ -445,7 +449,7 @@ export function BotPage() {
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <code className="text-emerald-400 font-mono text-sm">!{cmd.name}</code>
+                      <code className="text-emerald-400 font-mono text-sm">{botConfig?.prefix || "!"}{cmd.name}</code>
                       {cmd.mod_only && (
                         <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400">
                           <Lock className="w-3 h-3 mr-1" />
@@ -459,7 +463,7 @@ export function BotPage() {
                     <p className="text-sm text-zinc-400 mt-1">{cmd.response}</p>
                   </div>
                   <div className="flex items-center gap-2 ml-4">
-                    <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400" onClick={() => deleteCommand(cmd.name)}>
+                    <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400" onClick={() => setConfirmDeleteCmd(cmd.name)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -561,7 +565,7 @@ export function BotPage() {
                       </div>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400" onClick={() => deleteTimedMessage(msg.id)}>
+                  <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-red-400" onClick={() => setConfirmDeleteTimed(msg.id)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </CardContent>
@@ -861,6 +865,24 @@ export function BotPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      <ConfirmDialog
+        open={confirmDeleteCmd !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteCmd(null); }}
+        title="Delete Command"
+        description={`Are you sure you want to delete the !${confirmDeleteCmd || ""} command? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => { if (confirmDeleteCmd) deleteCommand(confirmDeleteCmd); }}
+      />
+      <ConfirmDialog
+        open={confirmDeleteTimed !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteTimed(null); }}
+        title="Delete Timed Message"
+        description="Are you sure you want to delete this timed message? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => { if (confirmDeleteTimed) deleteTimedMessage(confirmDeleteTimed); }}
+      />
     </div>
   );
 }
