@@ -211,7 +211,7 @@ export function LandingPage() {
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
         <div className="relative max-w-4xl mx-auto text-center">
           <Badge className="mb-6 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-4 py-1.5">
-            The #1 Toolkit for Kick Streamers
+            Built for Kick Streamers
           </Badge>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight">
             Supercharge Your{" "}
@@ -504,8 +504,8 @@ export function LandingPage() {
             Ready to Level Up Your Stream?
           </h2>
           <p className="text-zinc-400 mb-8 text-lg">
-            Join thousands of Kick streamers who use KickTools to grow their
-            channel and engage their audience.
+            Start streaming smarter today — connect your Kick account and
+            unlock powerful tools for free.
           </p>
           <Button
             size="lg"

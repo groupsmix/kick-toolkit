@@ -6,6 +6,7 @@ import { RouteErrorBoundary } from "@/components/RouteErrorBoundary";
 import { PageSkeleton } from "@/components/LoadingSkeleton";
 import { Toaster } from "sonner";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Suspense, lazy } from "react";
 
 // Eagerly loaded (needed immediately)
@@ -203,6 +204,7 @@ function App() {
         <AuthProvider>
           <ErrorBoundary>
             <AppRoutes />
+            <CommandPalette />
           </ErrorBoundary>
           <Toaster
             position="bottom-right"

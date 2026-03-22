@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/hooks/useApi";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/LoadingSkeleton";
 import {
   XAxis,
   YAxis,
@@ -30,8 +31,6 @@ import {
   RefreshCw,
   ArrowUpRight,
   ArrowDownRight,
-  Trophy,
-  Zap,
   Star,
   PlusCircle,
   Activity,
@@ -114,7 +113,7 @@ export function AnalyticsPage() {
   const channel = user?.streamer_channel || user?.name || "";
 
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
-  const [stockLeaderboard, setStockLeaderboard] = useState<StockEntry[]>([]);
+  const [, setStockLeaderboard] = useState<StockEntry[]>([]);
   const [narrative, setNarrative] = useState("");
   const [loading, setLoading] = useState(true);
   const [predictionsLoading, setPredictionsLoading] = useState(false);
@@ -200,16 +199,6 @@ export function AnalyticsPage() {
     }
   };
 
-  const refreshStocks = async () => {
-    try {
-      const result = await api<StockEntry[]>("/api/analytics/stock/refresh", { method: "POST" });
-      setStockLeaderboard(result);
-      toast.success("Stock scores refreshed!");
-      fetchData();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to refresh");
-    }
-  };
 
   const trendConfig = (trend: string) =>
     TREND_CONFIG[trend as keyof typeof TREND_CONFIG] || TREND_CONFIG.stable;
@@ -224,11 +213,7 @@ export function AnalyticsPage() {
     new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   const chartData = overview?.recent_snapshots
@@ -319,9 +304,6 @@ export function AnalyticsPage() {
           </TabsTrigger>
           <TabsTrigger value="comparisons" className="data-[state=active]:bg-zinc-800">
             Comparisons
-          </TabsTrigger>
-          <TabsTrigger value="stock" className="data-[state=active]:bg-zinc-800">
-            Stock Market
           </TabsTrigger>
           <TabsTrigger value="record" className="data-[state=active]:bg-zinc-800">
             Record Data
@@ -577,141 +559,6 @@ export function AnalyticsPage() {
                 <p className="text-zinc-400 text-sm">No comparisons yet</p>
                 <p className="text-zinc-600 text-xs mt-1">
                   Click &quot;Find Similar Streamers&quot; to compare your growth curve
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Stock Market Tab */}
-        <TabsContent value="stock" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-zinc-400">
-              <span className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" />
-                Streamer Stock Market
-              </span>
-            </h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-zinc-400 hover:text-white"
-              onClick={refreshStocks}
-            >
-              <RefreshCw className="w-4 h-4 mr-1" />
-              Refresh
-            </Button>
-          </div>
-
-          {/* Your Stock Card */}
-          {overview?.stock && (
-            <Card className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-zinc-500 uppercase mb-1">Your Stock Price</p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl font-bold text-white">
-                        ${overview.stock.stock_score.toFixed(0)}
-                      </span>
-                      <span
-                        className={`flex items-center text-sm ${
-                          overview.stock.change_pct >= 0 ? "text-emerald-400" : "text-red-400"
-                        }`}
-                      >
-                        {overview.stock.change_pct >= 0 ? (
-                          <ArrowUpRight className="w-4 h-4" />
-                        ) : (
-                          <ArrowDownRight className="w-4 h-4" />
-                        )}
-                        {Math.abs(overview.stock.change_pct).toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge className="bg-amber-500/20 text-amber-400 mb-1">
-                      Rank #{overview.stock.rank}
-                    </Badge>
-                    <p className="text-xs text-zinc-500">
-                      {formatNumber(overview.stock.avg_viewers)} viewers
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Leaderboard */}
-          {stockLeaderboard.length > 0 ? (
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardHeader>
-                <CardTitle className="text-sm text-zinc-400 flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  Leaderboard
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="max-h-80">
-                  <div className="divide-y divide-zinc-800/50">
-                    {stockLeaderboard.map((entry, idx) => {
-                      const tc = trendConfig(entry.trend);
-                      const TrendIcon = tc.icon;
-                      return (
-                        <div
-                          key={entry.channel}
-                          className={`px-4 py-3 flex items-center justify-between hover:bg-zinc-800/30 ${
-                            entry.channel === channel ? "bg-amber-500/5" : ""
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                                idx === 0
-                                  ? "bg-amber-500/20 text-amber-400"
-                                  : idx === 1
-                                    ? "bg-zinc-400/20 text-zinc-300"
-                                    : idx === 2
-                                      ? "bg-orange-500/20 text-orange-400"
-                                      : "bg-zinc-800 text-zinc-500"
-                              }`}
-                            >
-                              {idx + 1}
-                            </span>
-                            <div>
-                              <p className="text-sm text-white font-medium">
-                                {entry.channel}
-                                {entry.channel === channel && (
-                                  <span className="text-[10px] text-amber-400 ml-1">(you)</span>
-                                )}
-                              </p>
-                              <p className="text-[10px] text-zinc-500">
-                                {formatNumber(entry.avg_viewers)} viewers · {formatNumber(entry.follower_count)} followers
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`flex items-center gap-1 text-xs ${tc.color}`}>
-                              <TrendIcon className="w-3 h-3" />
-                              {entry.change_pct >= 0 ? "+" : ""}{entry.change_pct.toFixed(1)}%
-                            </span>
-                            <span className="text-sm font-bold text-white">
-                              ${entry.stock_score.toFixed(0)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="bg-zinc-900/50 border-zinc-800">
-              <CardContent className="p-8 text-center">
-                <Trophy className="w-12 h-12 text-zinc-700 mx-auto mb-3" />
-                <p className="text-zinc-400 text-sm">No stock data yet</p>
-                <p className="text-zinc-600 text-xs mt-1">
-                  Record snapshots and refresh to see the streamer leaderboard
                 </p>
               </CardContent>
             </Card>

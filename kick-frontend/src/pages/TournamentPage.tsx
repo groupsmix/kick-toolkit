@@ -20,6 +20,8 @@ import {
   Gamepad2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PageSkeleton } from "@/components/LoadingSkeleton";
 
 interface Participant {
   username: string;
@@ -69,6 +71,9 @@ export function TournamentPage() {
     entry_duration_seconds: 300,
     description: "",
   });
+
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,11 +178,7 @@ export function TournamentPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (error) {
@@ -330,12 +331,12 @@ export function TournamentPage() {
                         </Button>
                       )}
                       {selected.status !== "registration" && (
-                        <Button onClick={resetTournament} variant="outline" className="border-zinc-700 text-zinc-300">
+                        <Button onClick={() => setConfirmReset(true)} variant="outline" className="border-zinc-700 text-zinc-300">
                           <RotateCcw className="w-4 h-4 mr-2" />
                           Reset
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => deleteTournament(selected.id)} className="text-zinc-500 hover:text-red-400">
+                      <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(selected.id)} className="text-zinc-500 hover:text-red-400">
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
@@ -520,6 +521,24 @@ export function TournamentPage() {
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        onOpenChange={(open) => { if (!open) setConfirmDelete(null); }}
+        title="Delete Tournament"
+        description="Are you sure you want to delete this tournament? All participants, brackets, and match results will be permanently lost."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => { if (confirmDelete) deleteTournament(confirmDelete); }}
+      />
+      <ConfirmDialog
+        open={confirmReset}
+        onOpenChange={setConfirmReset}
+        title="Reset Tournament"
+        description="Are you sure you want to reset this tournament? All brackets and match results will be cleared and the tournament will return to registration."
+        confirmLabel="Reset"
+        variant="danger"
+        onConfirm={() => { resetTournament(); }}
+      />
     </div>
   );
 }
