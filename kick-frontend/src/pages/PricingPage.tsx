@@ -21,10 +21,10 @@ interface PlanFeature {
 
 const planFeatures: PlanFeature[] = [
   { name: "Dashboard Overview", free: true, pro: true, premium: true },
-  { name: "Bot Commands", free: "5 commands", pro: "Unlimited", premium: "Unlimited" },
-  { name: "Chat Log History", free: "100 entries", pro: "Unlimited", premium: "Unlimited" },
-  { name: "Active Giveaways", free: "1 at a time", pro: "Unlimited", premium: "Unlimited" },
-  { name: "AI Chat Moderation", free: false, pro: true, premium: true },
+  { name: "Bot Commands", free: "20 commands", pro: "Unlimited", premium: "Unlimited" },
+  { name: "Chat Log History", free: "1,000 entries", pro: "Unlimited", premium: "Unlimited" },
+  { name: "Active Giveaways", free: "3 at a time", pro: "Unlimited", premium: "Unlimited" },
+  { name: "AI Chat Moderation", free: "Basic", pro: true, premium: true },
   { name: "Chat Analytics", free: false, pro: true, premium: true },
   { name: "Giveaway Ideas Generator", free: true, pro: true, premium: true },
   { name: "Anti-Alt Detection", free: false, pro: false, premium: true },

@@ -16,13 +16,12 @@ import {
   Brain,
   Scissors,
   Map,
-  Building2,
   Star,
   Music,
   Calendar,
   Monitor,
-  Store,
   Activity,
+  ClipboardList,
   Heart,
   Sparkles,
   MessageCircle,
@@ -31,6 +30,7 @@ import {
   Vote,
   TrendingUp,
   LanguagesIcon,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -49,29 +49,29 @@ type NavItem =
 
 const navItems: NavItem[] = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
+  { type: "separator", label: "Core Tools" },
   { path: "/bot", label: "Chat Bot & AI Mod", icon: Bot },
   { path: "/chatlogs", label: "Chat Logs", icon: MessageSquare },
   { path: "/giveaway", label: "Giveaway Roller", icon: Gift },
-  { path: "/antialt", label: "Anti-Alt Detection", icon: ShieldAlert, premium: true },
-  { path: "/anticheat", label: "Anti-Cheat", icon: ShieldCheck, premium: true },
   { path: "/tournament", label: "Tournament", icon: Trophy },
   { path: "/ideas", label: "Giveaway Ideas", icon: Lightbulb },
-  { path: "/analytics", label: "Predictive Analytics", icon: BarChart3, premium: true },
-  { path: "/coach", label: "AI Stream Coach", icon: Brain, premium: true },
-  { path: "/clips", label: "AI Clip Pipeline", icon: Scissors, premium: true },
-  { path: "/heatmap", label: "Viewer Heatmap", icon: Map, premium: true },
-  { path: "/whitelabel", label: "White-Label", icon: Building2, premium: true },
-  { path: "/loyalty", label: "Loyalty & Points", icon: Star },
-  { path: "/songs", label: "Song Requests", icon: Music },
-  { path: "/schedule", label: "Stream Schedule", icon: Calendar },
-  { path: "/overlays", label: "OBS Overlays", icon: Monitor },
-  { path: "/marketplace", label: "Marketplace", icon: Store },
   { type: "separator", label: "Engagement" },
   { path: "/polls", label: "Chat Polls", icon: Vote },
   { path: "/predictions", label: "Predictions", icon: TrendingUp },
+  { path: "/loyalty", label: "Loyalty & Points", icon: Star },
+  { path: "/songs", label: "Song Requests", icon: Music },
   { path: "/translation", label: "Translation", icon: LanguagesIcon },
-  { type: "separator", label: "Streamer Intelligence" },
-  { path: "/stream-intel", label: "Stream Intelligence", icon: Activity, premium: true },
+  { type: "separator", label: "Stream Management" },
+  { path: "/schedule", label: "Stream Schedule", icon: Calendar },
+  { path: "/overlays", label: "OBS Overlays", icon: Monitor },
+  { path: "/antialt", label: "Anti-Alt Detection", icon: ShieldAlert, premium: true },
+  { path: "/anticheat", label: "Anti-Cheat", icon: ShieldCheck, premium: true },
+  { type: "separator", label: "Analytics & AI" },
+  { path: "/analytics", label: "Analytics", icon: BarChart3, premium: true },
+  { path: "/coach", label: "AI Stream Coach", icon: Brain, premium: true },
+  { path: "/clips", label: "AI Clip Pipeline", icon: Scissors, premium: true },
+  { path: "/heatmap", label: "Viewer Heatmap", icon: Map, premium: true },
+  { path: "/stream-intel", label: "Stream Intel", icon: Activity, premium: true },
   { path: "/viewer-crm", label: "Viewer CRM", icon: Heart, premium: true },
   { path: "/debrief", label: "AI Debrief", icon: Sparkles, premium: true },
   { path: "/discord", label: "Discord Bot", icon: MessageCircle, premium: true },
@@ -148,8 +148,36 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
 
       <Separator className="bg-zinc-800" />
 
-      {/* Collapse toggle */}
-      <div className="p-2">
+      {/* Activity + Settings + Collapse */}
+      <div className="p-2 space-y-1">
+        <button
+          onClick={() => { navigate("/activity"); onNavigate?.(); }}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+            location.pathname === "/activity"
+              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
+            collapsed && "justify-center px-0"
+          )}
+          title={collapsed ? "Activity Log" : undefined}
+        >
+          <ClipboardList className={cn("w-5 h-5 flex-shrink-0", location.pathname === "/activity" && "text-emerald-400")} />
+          {!collapsed && <span className="flex-1 text-left">Activity Log</span>}
+        </button>
+        <button
+          onClick={() => { navigate("/settings"); onNavigate?.(); }}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+            location.pathname === "/settings"
+              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+              : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
+            collapsed && "justify-center px-0"
+          )}
+          title={collapsed ? "Settings" : undefined}
+        >
+          <Settings className={cn("w-5 h-5 flex-shrink-0", location.pathname === "/settings" && "text-emerald-400")} />
+          {!collapsed && <span className="flex-1 text-left">Settings</span>}
+        </button>
         <Button
           variant="ghost"
           size="sm"

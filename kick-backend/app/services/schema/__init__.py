@@ -31,6 +31,7 @@ from app.services.schema.revenue import SCHEMA_SQL as REVENUE_SCHEMA
 from app.services.schema.highlights import SCHEMA_SQL as HIGHLIGHTS_SCHEMA
 from app.services.schema.engagement import SCHEMA_SQL as ENGAGEMENT_SCHEMA
 from app.services.schema.translation import SCHEMA_SQL as TRANSLATION_SCHEMA
+from app.services.schema.activity import SCHEMA_SQL as ACTIVITY_SCHEMA
 
 _ALL_SCHEMAS = [
     AUTH_SCHEMA,
@@ -59,6 +60,7 @@ _ALL_SCHEMAS = [
     HIGHLIGHTS_SCHEMA,
     ENGAGEMENT_SCHEMA,
     TRANSLATION_SCHEMA,
+    ACTIVITY_SCHEMA,
 ]
 
 
