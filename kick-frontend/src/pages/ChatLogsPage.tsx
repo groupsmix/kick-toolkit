@@ -18,6 +18,7 @@ import {
   Download,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { PageSkeleton } from "@/components/LoadingSkeleton";
 
 interface ChatLog {
   id: string;
@@ -111,11 +112,7 @@ export function ChatLogsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (error && logs.length === 0) {
