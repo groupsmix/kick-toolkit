@@ -3,7 +3,6 @@
 import json
 import os
 import secrets
-import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
