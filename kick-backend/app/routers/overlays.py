@@ -85,7 +85,7 @@ async def get_wordcloud(
         row = await conn.execute(
             """SELECT message FROM chat_logs
                WHERE channel = %s
-                 AND timestamp >= (NOW() - INTERVAL '%s minutes')::text
+                 AND timestamp >= (NOW() - make_interval(mins => %s))::text
                ORDER BY timestamp DESC LIMIT 5000""",
             (channel, minutes),
         )

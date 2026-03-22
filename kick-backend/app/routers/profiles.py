@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, safe_json_parse
 from app.models.schemas import StreamerProfileUpdate
 from app.repositories import profiles as profiles_repo
 from app.repositories import schedule as schedule_repo
@@ -16,13 +16,7 @@ router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 
 @router.get("/me")
 async def get_my_profile(session: dict = Depends(require_auth)) -> dict:
-    user_data = session.get("user_data", {})
-    if isinstance(user_data, str):
-        import json
-        try:
-            user_data = json.loads(user_data)
-        except (json.JSONDecodeError, TypeError):
-            user_data = {}
+    user_data = safe_json_parse(session.get("user_data", {}))
     channel = user_data.get("streamer_channel") or user_data.get("name", "")
     profile = await profiles_repo.get_profile(channel)
     if profile:
@@ -39,13 +33,7 @@ async def get_my_profile(session: dict = Depends(require_auth)) -> dict:
 async def update_my_profile(
     body: StreamerProfileUpdate, session: dict = Depends(require_auth)
 ) -> dict:
-    user_data = session.get("user_data", {})
-    if isinstance(user_data, str):
-        import json
-        try:
-            user_data = json.loads(user_data)
-        except (json.JSONDecodeError, TypeError):
-            user_data = {}
+    user_data = safe_json_parse(session.get("user_data", {}))
     channel = user_data.get("streamer_channel") or user_data.get("name", "")
 
     # Get existing or defaults

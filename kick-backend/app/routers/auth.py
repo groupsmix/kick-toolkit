@@ -1,12 +1,11 @@
 """Kick OAuth 2.1 authentication routes."""
 
-import json
 import logging
 
 from fastapi import APIRouter, Depends, Response, HTTPException
 from fastapi.responses import RedirectResponse
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, safe_json_parse
 from app.services.kick_auth import (
     create_auth_url,
     exchange_code,
@@ -56,13 +55,7 @@ async def callback(code: str, state: str, response: Response):
 @router.get("/me")
 async def me(session: dict = Depends(require_auth)):
     """Get current user info from session (uses Authorization header)."""
-    user_data = session.get("user_data", {})
-    # Guard against double-serialised JSON (stored as string instead of dict)
-    if isinstance(user_data, str):
-        try:
-            user_data = json.loads(user_data)
-        except (json.JSONDecodeError, TypeError):
-            user_data = {}
+    user_data = safe_json_parse(session.get("user_data", {}))
 
     # Return expires_in so the frontend can schedule token refresh
     expires_in = None

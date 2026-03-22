@@ -288,21 +288,40 @@ _CATEGORY_ACTION_MAP: dict[str, str] = {
 }
 
 
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=10.0,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+    return _http_client
+
+
 @mod_router.post("/analyze")
-async def analyze_message(msg: ChatMessage) -> ModerationResult:
+async def analyze_message(
+    msg: ChatMessage,
+    _session: dict = Depends(require_auth),
+) -> ModerationResult:
     """Analyze a chat message using the OpenAI Moderation API."""
     if not OPENAI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="OpenAI API key not configured. Set the OPENAI_API_KEY environment variable.",
+            detail="Moderation service unavailable",
         )
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(
-            OPENAI_MODERATION_URL,
-            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-            json={"input": msg.message},
-        )
+    if len(msg.message) > 5000:
+        raise HTTPException(status_code=400, detail="Message too long (max 5000 chars)")
+
+    client = _get_http_client()
+    response = await client.post(
+        OPENAI_MODERATION_URL,
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+        json={"input": msg.message},
+    )
 
     if response.status_code != 200:
         logger.error("OpenAI Moderation API error: %s %s", response.status_code, response.text)

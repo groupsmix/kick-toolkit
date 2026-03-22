@@ -2,6 +2,7 @@
 
 import logging
 import time
+from collections import OrderedDict
 from typing import Optional
 
 import httpx
@@ -10,8 +11,9 @@ logger = logging.getLogger(__name__)
 
 KICK_API_BASE = "https://kick.com/api"
 
-# Simple in-memory cache with TTL
-_cache: dict[str, tuple[float, dict]] = {}
+# LRU cache with TTL and bounded size
+_CACHE_MAX_SIZE = 500
+_cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
 CACHE_TTL_SECONDS = 30
 
 
@@ -20,6 +22,7 @@ def _get_cached(key: str) -> Optional[dict]:
     if key in _cache:
         ts, data = _cache[key]
         if time.time() - ts < CACHE_TTL_SECONDS:
+            _cache.move_to_end(key)
             return data
         del _cache[key]
     return None
@@ -27,6 +30,9 @@ def _get_cached(key: str) -> Optional[dict]:
 
 def _set_cached(key: str, data: dict) -> None:
     _cache[key] = (time.time(), data)
+    _cache.move_to_end(key)
+    while len(_cache) > _CACHE_MAX_SIZE:
+        _cache.popitem(last=False)
 
 
 async def get_channel_info(channel: str) -> Optional[dict]:
