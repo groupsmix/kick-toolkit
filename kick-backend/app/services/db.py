@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -56,7 +57,8 @@ async def get_conn():
 
 
 def _generate_id() -> str:
-    return str(uuid.uuid4())[:8]
+    """Generate a URL-safe random ID with 128 bits of entropy."""
+    return secrets.token_urlsafe(16)
 
 
 def _now_iso() -> str:

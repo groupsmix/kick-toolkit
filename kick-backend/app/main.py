@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _RATE_STORE_MAX_KEYS = 10_000
-_rate_store: OrderedDict[str, list[float]] = OrderedDict()
+_rate_store: OrderedDict[str, deque[float]] = OrderedDict()
 RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX = 60     # requests per window
 
@@ -64,9 +64,10 @@ async def _rate_limit(request: Request) -> None:
     """Check rate limit per client IP. Raises 429 if exceeded."""
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
-    timestamps = _rate_store.get(client_ip, [])
-    # Remove expired entries
-    timestamps = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
+    timestamps = _rate_store.get(client_ip, deque())
+    # Evict expired from front (O(1) per eviction since timestamps are ordered)
+    while timestamps and now - timestamps[0] >= RATE_LIMIT_WINDOW:
+        timestamps.popleft()
     if len(timestamps) >= RATE_LIMIT_MAX:
         _rate_store[client_ip] = timestamps
         raise HTTPException(status_code=429, detail="Too many requests")
@@ -105,8 +106,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Include all routers

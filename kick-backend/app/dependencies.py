@@ -1,10 +1,40 @@
-"""FastAPI dependencies for authentication."""
+"""FastAPI dependencies for authentication and shared utilities."""
 
+import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import Header, HTTPException
 
 from app.services.db import get_conn
+
+logger = logging.getLogger(__name__)
+
+
+def extract_user_id(session: dict) -> str:
+    """Safely extract user_id from session data. Raises 401 on failure."""
+    user_data = session.get("user_data")
+    if isinstance(user_data, str):
+        try:
+            user_data = json.loads(user_data)
+        except (json.JSONDecodeError, TypeError):
+            raise HTTPException(status_code=401, detail="Corrupt session data")
+    if not user_data or not user_data.get("user_id"):
+        raise HTTPException(status_code=401, detail="User ID not found in session")
+    return str(user_data["user_id"])
+
+
+def safe_json_parse(value, default=None):
+    """Parse JSON string, returning default on failure."""
+    if isinstance(value, (dict, list)):
+        return value
+    if not value:
+        return default if default is not None else {}
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Failed to parse JSON: %r", value[:100] if isinstance(value, str) else value)
+        return default if default is not None else {}
 
 
 async def require_auth(authorization: str = Header(..., description="Bearer <session_id>")) -> dict:
@@ -18,7 +48,7 @@ async def require_auth(authorization: str = Header(..., description="Bearer <ses
 
     async with get_conn() as conn:
         row = await conn.execute(
-            "SELECT session_id, user_data, scope, access_token, expires_at FROM sessions WHERE session_id = %s",
+            "SELECT session_id, user_data, scope, expires_at FROM sessions WHERE session_id = %s",
             (session_id,),
         )
         session = await row.fetchone()
@@ -41,6 +71,7 @@ async def require_auth(authorization: str = Header(..., description="Bearer <ses
                     await conn.commit()
                 raise HTTPException(status_code=401, detail="Session expired")
         except (ValueError, TypeError):
-            pass  # Malformed date — allow through for backwards compat
+            logger.warning("Malformed expires_at for session %s: %r", session_id, expires_at)
+            raise HTTPException(status_code=401, detail="Invalid session — please log in again")
 
     return dict(session)

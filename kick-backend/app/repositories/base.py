@@ -50,15 +50,23 @@ class BaseRepository:
             row = await cur.fetchone()
         return dict(row) if row else None
 
+    ALLOWED_ORDER_COLUMNS = {"created_at", "updated_at", "name", "id"}
+    ALLOWED_DIRECTIONS = {"ASC", "DESC"}
+
     async def list_by_channel(
         self,
         channel: str,
         order_by: str = "created_at DESC",
     ) -> list[dict]:
         """Return all rows for a channel, ordered by *order_by*."""
+        parts = order_by.strip().split()
+        column = parts[0] if parts else "created_at"
+        direction = parts[1].upper() if len(parts) > 1 else "DESC"
+        if column not in self.ALLOWED_ORDER_COLUMNS or direction not in self.ALLOWED_DIRECTIONS:
+            raise ValueError(f"Invalid order_by: {order_by}")
         async with get_conn() as conn:
             cur = await conn.execute(
-                f"SELECT * FROM {self.table} WHERE channel = %s ORDER BY {order_by}",
+                f"SELECT * FROM {self.table} WHERE channel = %s ORDER BY {column} {direction}",
                 (channel,),
             )
             rows = await cur.fetchall()

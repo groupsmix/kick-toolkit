@@ -38,7 +38,7 @@ IDEA_TEMPLATES = [
 
 
 @router.post("/generate")
-async def generate_ideas(req: IdeaGenerateRequest) -> list[GiveawayIdea]:
+async def generate_ideas(req: IdeaGenerateRequest, _session: dict = Depends(require_auth)) -> list[GiveawayIdea]:
     pool = IDEA_TEMPLATES.copy()
 
     if req.category:
@@ -82,7 +82,7 @@ async def delete_saved_idea(idea_id: str, _session: dict = Depends(require_auth)
 
 
 @router.get("/categories")
-async def get_categories() -> list[dict]:
+async def get_categories(_session: dict = Depends(require_auth)) -> list[dict]:
     return [
         {"value": "physical", "label": "Physical Prizes", "icon": "package", "count": len([i for i in IDEA_TEMPLATES if i["category"] == "physical"])},
         {"value": "digital", "label": "Digital Prizes", "icon": "download", "count": len([i for i in IDEA_TEMPLATES if i["category"] == "digital"])},

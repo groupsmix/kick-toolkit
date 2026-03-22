@@ -5,7 +5,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, extract_user_id, safe_json_parse
 from app.repositories import subscription as sub_repo
 from app.services import lemonsqueezy as lemon
 
@@ -24,13 +24,7 @@ async def get_plans():
 @router.get("/me")
 async def get_my_subscription(session: dict = Depends(require_auth)):
     """Get the current user's subscription and usage."""
-    user_data = session.get("user_data")
-    if isinstance(user_data, str):
-        user_data = json.loads(user_data)
-
-    user_id = str(user_data.get("user_id", "")) if user_data else ""
-    if not user_id:
-        raise HTTPException(status_code=400, detail="User ID not found in session")
+    user_id = extract_user_id(session)
 
     # Get or create subscription
     sub = await sub_repo.get_subscription(user_id)
@@ -56,16 +50,10 @@ async def create_checkout(
     if plan not in ("pro", "premium"):
         raise HTTPException(status_code=400, detail="Invalid plan. Choose 'pro' or 'premium'")
 
-    user_data = session.get("user_data")
-    if isinstance(user_data, str):
-        user_data = json.loads(user_data)
-
-    user_id = str(user_data.get("user_id", "")) if user_data else ""
+    user_id = extract_user_id(session)
+    user_data = safe_json_parse(session.get("user_data"))
     user_email = user_data.get("email") if user_data else None
     user_name = user_data.get("name") if user_data else None
-
-    if not user_id:
-        raise HTTPException(status_code=400, detail="User ID not found in session")
 
     checkout_url = await lemon.create_checkout(
         plan=plan,

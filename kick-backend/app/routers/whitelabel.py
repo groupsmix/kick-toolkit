@@ -1,5 +1,6 @@
 """White-Label Platform (B2B) router."""
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +17,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/whitelabel", tags=["whitelabel"])
 
 
+def _get_user_id(session: dict) -> str:
+    """Extract user_id from session, handling JSON-encoded user_data."""
+    user_data = session.get("user_data")
+    if isinstance(user_data, str):
+        try:
+            user_data = json.loads(user_data)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+    return str(user_data.get("user_id", "")) if user_data else ""
+
+
+async def _require_org_member(org_id: str, session: dict) -> dict:
+    """Verify user is a member of the org. Returns org dict."""
+    org = await wl_repo.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    user_id = _get_user_id(session)
+    members = await wl_repo.get_members(org_id)
+    member_ids = {m["user_id"] for m in members}
+    if user_id != org.get("owner_user_id") and user_id not in member_ids:
+        raise HTTPException(status_code=403, detail="Not a member of this organization")
+    return org
+
+
+async def _require_org_owner(org_id: str, session: dict) -> dict:
+    """Verify user is the owner of the org."""
+    org = await wl_repo.get_org(org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    user_id = _get_user_id(session)
+    if user_id != org.get("owner_user_id"):
+        raise HTTPException(status_code=403, detail="Only the org owner can perform this action")
+    return org
+
+
 # ---------------------------------------------------------------------------
 # Organizations
 # ---------------------------------------------------------------------------
@@ -28,7 +64,7 @@ async def create_org(
     existing = await wl_repo.get_org_by_slug(body.slug)
     if existing:
         raise HTTPException(status_code=409, detail="Organization slug already taken")
-    owner_id = session.get("user_id", session.get("session_id", ""))
+    owner_id = _get_user_id(session) or session.get("session_id", "")
     return await wl_repo.create_org(
         name=body.name, slug=body.slug, owner_user_id=owner_id,
         plan=body.plan, max_members=body.max_members, custom_domain=body.custom_domain,
@@ -37,22 +73,20 @@ async def create_org(
 
 @router.get("/orgs")
 async def list_user_orgs(session: dict = Depends(require_auth)) -> list[dict]:
-    user_id = session.get("user_id", session.get("session_id", ""))
+    user_id = _get_user_id(session) or session.get("session_id", "")
     return await wl_repo.get_user_orgs(user_id)
 
 
 @router.get("/orgs/{org_id}")
-async def get_org(org_id: str, _session: dict = Depends(require_auth)) -> dict:
-    org = await wl_repo.get_org(org_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    return org
+async def get_org(org_id: str, session: dict = Depends(require_auth)) -> dict:
+    return await _require_org_member(org_id, session)
 
 
 @router.put("/orgs/{org_id}")
 async def update_org(
-    org_id: str, body: OrganizationUpdate, _session: dict = Depends(require_auth)
+    org_id: str, body: OrganizationUpdate, session: dict = Depends(require_auth)
 ) -> dict:
+    await _require_org_owner(org_id, session)
     org = await wl_repo.update_org(
         org_id,
         name=body.name,
@@ -67,7 +101,8 @@ async def update_org(
 
 
 @router.delete("/orgs/{org_id}")
-async def delete_org(org_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def delete_org(org_id: str, session: dict = Depends(require_auth)) -> dict:
+    await _require_org_owner(org_id, session)
     deleted = await wl_repo.delete_org(org_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -80,11 +115,9 @@ async def delete_org(org_id: str, _session: dict = Depends(require_auth)) -> dic
 
 @router.post("/orgs/{org_id}/members")
 async def add_member(
-    org_id: str, body: OrgMemberAdd, _session: dict = Depends(require_auth)
+    org_id: str, body: OrgMemberAdd, session: dict = Depends(require_auth)
 ) -> dict:
-    org = await wl_repo.get_org(org_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = await _require_org_owner(org_id, session)
     # Check member limit
     members = await wl_repo.get_members(org_id)
     if len(members) >= org.get("max_members", 5):
@@ -97,18 +130,17 @@ async def add_member(
 
 @router.get("/orgs/{org_id}/members")
 async def list_members(
-    org_id: str, _session: dict = Depends(require_auth)
+    org_id: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    await _require_org_member(org_id, session)
     return await wl_repo.get_members(org_id)
 
 
 @router.delete("/orgs/{org_id}/members/{user_id}")
 async def remove_member(
-    org_id: str, user_id: str, _session: dict = Depends(require_auth)
+    org_id: str, user_id: str, session: dict = Depends(require_auth)
 ) -> dict:
-    org = await wl_repo.get_org(org_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = await _require_org_owner(org_id, session)
     if user_id == org.get("owner_user_id"):
         raise HTTPException(status_code=400, detail="Cannot remove the organization owner")
     removed = await wl_repo.remove_member(org_id, user_id)
@@ -123,15 +155,17 @@ async def remove_member(
 
 @router.get("/orgs/{org_id}/branding")
 async def get_branding(
-    org_id: str, _session: dict = Depends(require_auth)
+    org_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    await _require_org_member(org_id, session)
     return await wl_repo.get_branding(org_id)
 
 
 @router.put("/orgs/{org_id}/branding")
 async def update_branding(
-    org_id: str, body: OrgBrandingUpdate, _session: dict = Depends(require_auth)
+    org_id: str, body: OrgBrandingUpdate, session: dict = Depends(require_auth)
 ) -> dict:
+    await _require_org_owner(org_id, session)
     return await wl_repo.update_branding(
         org_id=org_id,
         logo_url=body.logo_url,
@@ -150,15 +184,17 @@ async def update_branding(
 
 @router.get("/orgs/{org_id}/settings")
 async def get_settings(
-    org_id: str, _session: dict = Depends(require_auth)
+    org_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    await _require_org_member(org_id, session)
     return await wl_repo.get_settings(org_id)
 
 
 @router.put("/orgs/{org_id}/settings")
 async def update_settings(
-    org_id: str, body: OrgSettingsUpdate, _session: dict = Depends(require_auth)
+    org_id: str, body: OrgSettingsUpdate, session: dict = Depends(require_auth)
 ) -> dict:
+    await _require_org_owner(org_id, session)
     return await wl_repo.update_settings(
         org_id=org_id,
         features_enabled=body.features_enabled,
@@ -174,12 +210,10 @@ async def update_settings(
 
 @router.get("/orgs/{org_id}/analytics")
 async def get_org_analytics(
-    org_id: str, _session: dict = Depends(require_auth)
+    org_id: str, session: dict = Depends(require_auth)
 ) -> dict:
     """Aggregate analytics for all streamers in the org."""
-    org = await wl_repo.get_org(org_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = await _require_org_member(org_id, session)
     members = await wl_repo.get_members(org_id)
     return {
         "org_id": org_id,

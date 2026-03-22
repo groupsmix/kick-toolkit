@@ -1,10 +1,8 @@
 """Activity / audit log API routes."""
 
-import json
-
 from fastapi import APIRouter, Depends
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, safe_json_parse
 from app.services.db import get_conn, _now_iso, _generate_id
 
 router = APIRouter(prefix="/api/activity", tags=["activity"])
@@ -16,9 +14,7 @@ async def get_activity_log(
     session: dict = Depends(require_auth),
 ):
     """Return the recent activity log entries for the authenticated user."""
-    user_data = session.get("user_data")
-    if isinstance(user_data, str):
-        user_data = json.loads(user_data)
+    user_data = safe_json_parse(session.get("user_data"))
     channel = user_data.get("streamer_channel") or user_data.get("name", "") if user_data else ""
 
     async with get_conn() as conn:
@@ -40,9 +36,7 @@ async def create_activity(
     session: dict = Depends(require_auth),
 ):
     """Create an activity log entry."""
-    user_data = session.get("user_data")
-    if isinstance(user_data, str):
-        user_data = json.loads(user_data)
+    user_data = safe_json_parse(session.get("user_data"))
     channel = user_data.get("streamer_channel") or user_data.get("name", "") if user_data else ""
 
     entry_id = _generate_id()

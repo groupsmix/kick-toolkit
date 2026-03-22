@@ -1,11 +1,10 @@
 """Creator Economy Marketplace router."""
 
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, extract_user_id
 from app.models.schemas import (
     MarketplaceItemCreate, MarketplaceItemUpdate,
     MarketplaceReviewCreate, SellerProfileCreate, SellerProfileUpdate,
@@ -15,16 +14,6 @@ from app.repositories import marketplace as mp_repo
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/marketplace", tags=["marketplace"])
-
-
-def _extract_user_id(session: dict) -> str:
-    user_data = session.get("user_data")
-    if isinstance(user_data, str):
-        user_data = json.loads(user_data)
-    user_id = str(user_data.get("user_id", "")) if user_data else ""
-    if not user_id:
-        raise HTTPException(status_code=400, detail="User ID not found in session")
-    return user_id
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +59,7 @@ async def create_seller_profile(
     body: SellerProfileCreate, session: dict = Depends(require_auth),
 ) -> dict:
     """Create or update the current user's seller profile."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     return await mp_repo.create_seller_profile(
         user_id=user_id, display_name=body.display_name,
         bio=body.bio, avatar_url=body.avatar_url, website=body.website,
@@ -80,7 +69,7 @@ async def create_seller_profile(
 @router.get("/seller/profile")
 async def get_my_seller_profile(session: dict = Depends(require_auth)) -> dict:
     """Get the current user's seller profile."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Seller profile not found. Create one first.")
@@ -92,7 +81,7 @@ async def update_my_seller_profile(
     body: SellerProfileUpdate, session: dict = Depends(require_auth),
 ) -> dict:
     """Update the current user's seller profile."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.update_seller_profile(
         user_id=user_id, display_name=body.display_name,
         bio=body.bio, avatar_url=body.avatar_url, website=body.website,
@@ -113,10 +102,13 @@ async def list_sellers(
 
 @router.get("/sellers/{profile_id}")
 async def get_seller(profile_id: str) -> dict:
-    """Get a seller profile by ID."""
+    """Get a seller profile by ID (public, sensitive fields redacted)."""
     profile = await mp_repo.get_seller_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Seller not found")
+    # Redact sensitive financial data from public endpoint
+    profile.pop("total_revenue", None)
+    profile.pop("payout_info", None)
     return profile
 
 
@@ -129,7 +121,7 @@ async def create_item(
     body: MarketplaceItemCreate, session: dict = Depends(require_auth),
 ) -> dict:
     """Create a new marketplace item for the current seller."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         raise HTTPException(status_code=400, detail="Create a seller profile first")
@@ -144,7 +136,7 @@ async def create_item(
 @router.get("/seller/items")
 async def list_my_items(session: dict = Depends(require_auth)) -> list[dict]:
     """List all items for the current seller."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         return []
@@ -157,7 +149,7 @@ async def update_item(
     session: dict = Depends(require_auth),
 ) -> dict:
     """Update a marketplace item owned by the current seller."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         raise HTTPException(status_code=400, detail="Seller profile not found")
@@ -179,7 +171,7 @@ async def delete_item(
     item_id: str, session: dict = Depends(require_auth),
 ) -> dict:
     """Delete a marketplace item owned by the current seller."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         raise HTTPException(status_code=400, detail="Seller profile not found")
@@ -198,7 +190,7 @@ async def purchase_item(
     item_id: str, session: dict = Depends(require_auth),
 ) -> dict:
     """Purchase a marketplace item."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
 
     item = await mp_repo.get_item(item_id)
     if not item:
@@ -225,7 +217,7 @@ async def purchase_item(
 @router.get("/purchases")
 async def get_my_purchases(session: dict = Depends(require_auth)) -> list[dict]:
     """Get the current user's purchases."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     return await mp_repo.get_user_purchases(user_id)
 
 
@@ -239,7 +231,7 @@ async def create_review(
     session: dict = Depends(require_auth),
 ) -> dict:
     """Submit a review for an item (must have purchased it)."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
 
     item = await mp_repo.get_item(item_id)
     if not item:
@@ -263,7 +255,7 @@ async def create_review(
 @router.get("/seller/revenue")
 async def get_my_revenue(session: dict = Depends(require_auth)) -> dict:
     """Get revenue analytics for the current seller."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Seller profile not found")
@@ -273,7 +265,7 @@ async def get_my_revenue(session: dict = Depends(require_auth)) -> dict:
 @router.get("/seller/payouts")
 async def get_my_payouts(session: dict = Depends(require_auth)) -> list[dict]:
     """Get payout history for the current seller."""
-    user_id = _extract_user_id(session)
+    user_id = extract_user_id(session)
     profile = await mp_repo.get_seller_profile_by_user(user_id)
     if not profile:
         return []

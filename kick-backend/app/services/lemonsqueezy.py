@@ -101,8 +101,12 @@ async def create_checkout(
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     """Verify the LemonSqueezy webhook signature."""
     if not LEMON_WEBHOOK_SECRET:
-        logger.warning("LEMONSQUEEZY_WEBHOOK_SECRET not set, skipping verification")
-        return True  # Allow in dev mode
+        # Only allow bypass in explicit dev mode, never in production
+        if os.environ.get("APP_ENV") == "development":
+            logger.warning("LEMONSQUEEZY_WEBHOOK_SECRET not set — DEV MODE bypass")
+            return True
+        logger.error("LEMONSQUEEZY_WEBHOOK_SECRET not set — rejecting webhook")
+        return False  # Fail closed in production
 
     computed = hmac.new(
         LEMON_WEBHOOK_SECRET.encode("utf-8"),
