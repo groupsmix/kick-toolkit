@@ -37,6 +37,26 @@ def safe_json_parse(value, default=None):
         return default if default is not None else {}
 
 
+def get_channel_from_session(session: dict) -> str:
+    """Extract the user's channel slug from their session data."""
+    user_data = session.get("user_data")
+    if isinstance(user_data, str):
+        try:
+            user_data = json.loads(user_data)
+        except (json.JSONDecodeError, TypeError):
+            return ""
+    if not user_data:
+        return ""
+    return str(user_data.get("streamer_channel") or user_data.get("name") or "")
+
+
+def require_channel_owner(session: dict, channel: str) -> None:
+    """Verify the authenticated user owns the given channel. Raises 403 on mismatch."""
+    user_channel = get_channel_from_session(session)
+    if not user_channel or user_channel != channel:
+        raise HTTPException(status_code=403, detail="Access denied: not your channel")
+
+
 async def require_auth(authorization: str = Header(..., description="Bearer <session_id>")) -> dict:
     """Validate session and return session data. Use as a FastAPI dependency."""
     if not authorization.startswith("Bearer "):

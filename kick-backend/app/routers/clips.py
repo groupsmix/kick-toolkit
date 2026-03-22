@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import ClipCreate, ClipPostRequest, ClipCaptionRequest
 from app.repositories import clips as clips_repo
 from app.services import clips as clips_service
@@ -22,8 +22,9 @@ router = APIRouter(prefix="/api/clips", tags=["clips"])
 async def get_hype_moments(
     channel: str,
     limit: int = Query(default=20, le=50),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await clips_repo.get_hype_moments(channel, limit)
 
 
@@ -31,8 +32,9 @@ async def get_hype_moments(
 async def detect_hype_moments(
     channel: str,
     window_minutes: int = Query(default=60, le=1440),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     moments = await clips_service.detect_hype_moments(channel, window_minutes)
     logger.info("Detected %d hype moments for channel=%s", len(moments), channel)
     return moments
@@ -44,8 +46,9 @@ async def detect_hype_moments(
 
 @router.post("/generate")
 async def create_clip(
-    body: ClipCreate, _session: dict = Depends(require_auth)
+    body: ClipCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, body.channel)
     clip = await clips_repo.create_clip(
         channel=body.channel,
         hype_moment_id=body.hype_moment_id,
@@ -64,14 +67,15 @@ async def create_clip(
 async def list_clips(
     channel: str,
     limit: int = Query(default=20, le=50),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await clips_repo.list_clips(channel, limit)
 
 
 @router.get("/{clip_id}")
 async def get_clip(
-    clip_id: str, _session: dict = Depends(require_auth)
+    clip_id: str, session: dict = Depends(require_auth)
 ) -> dict:
     clip = await clips_repo.get_clip(clip_id)
     if not clip:
@@ -81,7 +85,7 @@ async def get_clip(
 
 @router.delete("/{clip_id}")
 async def delete_clip(
-    clip_id: str, _session: dict = Depends(require_auth)
+    clip_id: str, session: dict = Depends(require_auth)
 ) -> dict:
     deleted = await clips_repo.delete_clip(clip_id)
     if not deleted:
@@ -97,7 +101,7 @@ async def delete_clip(
 async def generate_caption(
     clip_id: str,
     body: ClipCaptionRequest,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
     clip = await clips_repo.get_clip(clip_id)
     if not clip:
@@ -114,7 +118,7 @@ async def generate_caption(
 async def post_clip(
     clip_id: str,
     body: ClipPostRequest,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
     clip = await clips_repo.get_clip(clip_id)
     if not clip:
@@ -126,6 +130,6 @@ async def post_clip(
 
 @router.get("/{clip_id}/posts")
 async def get_clip_posts(
-    clip_id: str, _session: dict = Depends(require_auth)
+    clip_id: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
     return await clips_repo.get_clip_posts(clip_id)

@@ -6,7 +6,7 @@ import os
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import (
     BotConfig,
     BotCommand,
@@ -38,7 +38,8 @@ router = APIRouter(prefix="/api/bot", tags=["bot"])
 
 
 @router.get("/config/{channel}")
-async def get_bot_config(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_bot_config(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     config = await bot_repo.get_config(channel)
     if config:
         return dict(config)
@@ -58,7 +59,8 @@ async def get_bot_config(channel: str, _session: dict = Depends(require_auth)) -
 
 
 @router.post("/config")
-async def set_bot_config(config: BotConfig, _session: dict = Depends(require_auth)) -> dict:
+async def set_bot_config(config: BotConfig, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, config.channel)
     await bot_repo.upsert_config(
         config.channel, config.prefix, config.enabled,
         config.welcome_message, config.auto_mod_enabled,
@@ -70,12 +72,14 @@ async def set_bot_config(config: BotConfig, _session: dict = Depends(require_aut
 
 
 @router.get("/commands/{channel}")
-async def get_commands(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def get_commands(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await bot_repo.list_commands(channel)
 
 
 @router.post("/commands/{channel}")
-async def add_command(channel: str, command: BotCommand, _session: dict = Depends(require_auth)) -> dict:
+async def add_command(channel: str, command: BotCommand, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await bot_repo.create_command(
         channel, command.name, command.response,
         command.cooldown, command.enabled, command.mod_only,
@@ -85,14 +89,16 @@ async def add_command(channel: str, command: BotCommand, _session: dict = Depend
 
 
 @router.delete("/commands/{channel}/{command_name}")
-async def delete_command(channel: str, command_name: str, _session: dict = Depends(require_auth)) -> dict:
+async def delete_command(channel: str, command_name: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await bot_repo.delete_command(channel, command_name)
     logger.info("Command !%s deleted from channel=%s", command_name, channel)
     return {"status": "deleted"}
 
 
 @router.put("/commands/{channel}/{command_name}")
-async def update_command(channel: str, command_name: str, command: BotCommand, _session: dict = Depends(require_auth)) -> dict:
+async def update_command(channel: str, command_name: str, command: BotCommand, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     updated = await bot_repo.update_command(
         channel, command_name, command.name, command.response,
         command.cooldown, command.enabled, command.mod_only,
@@ -106,14 +112,15 @@ async def update_command(channel: str, command_name: str, command: BotCommand, _
 # ========== Command Variables ==========
 
 @router.get("/commands/variables/list")
-async def list_command_variables(_session: dict = Depends(require_auth)) -> list[dict]:
+async def list_command_variables(session: dict = Depends(require_auth)) -> list[dict]:
     """Return the list of supported command variables."""
     return COMMAND_VARIABLES
 
 
 @router.post("/commands/{channel}/execute")
-async def execute_command(channel: str, req: CommandExecuteRequest, _session: dict = Depends(require_auth)) -> CommandExecuteResult:
+async def execute_command(channel: str, req: CommandExecuteRequest, session: dict = Depends(require_auth)) -> CommandExecuteResult:
     """Execute a command and resolve variables in its response."""
+    require_channel_owner(session, channel)
     commands = await bot_repo.list_commands(channel)
     cmd = next((c for c in commands if c["name"] == req.command_name), None)
     if not cmd:
@@ -130,12 +137,14 @@ async def execute_command(channel: str, req: CommandExecuteRequest, _session: di
 # ========== Timed Messages ==========
 
 @router.get("/timed/{channel}")
-async def get_timed_messages(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def get_timed_messages(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await bot_repo.list_timed_messages(channel)
 
 
 @router.post("/timed/{channel}")
-async def create_timed_message(channel: str, msg: TimedMessageCreate, _session: dict = Depends(require_auth)) -> dict:
+async def create_timed_message(channel: str, msg: TimedMessageCreate, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     msg_id = await bot_repo.create_timed_message(
         channel, msg.message, msg.interval_minutes, msg.enabled,
     )
@@ -144,7 +153,8 @@ async def create_timed_message(channel: str, msg: TimedMessageCreate, _session: 
 
 
 @router.put("/timed/{channel}/{msg_id}")
-async def update_timed_message(channel: str, msg_id: str, msg: TimedMessageUpdate, _session: dict = Depends(require_auth)) -> dict:
+async def update_timed_message(channel: str, msg_id: str, msg: TimedMessageUpdate, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     updated = await bot_repo.update_timed_message(
         channel, msg_id, msg.message, msg.interval_minutes, msg.enabled,
     )
@@ -155,7 +165,8 @@ async def update_timed_message(channel: str, msg_id: str, msg: TimedMessageUpdat
 
 
 @router.delete("/timed/{channel}/{msg_id}")
-async def delete_timed_message(channel: str, msg_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def delete_timed_message(channel: str, msg_id: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await bot_repo.delete_timed_message(channel, msg_id)
     logger.info("Timed message %s deleted from channel=%s", msg_id, channel)
     return {"status": "deleted"}
@@ -238,12 +249,14 @@ mod_router = APIRouter(prefix="/api/moderation", tags=["moderation"])
 
 
 @mod_router.get("/rules/{channel}")
-async def get_moderation_rules(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def get_moderation_rules(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await bot_repo.list_moderation_rules(channel)
 
 
 @mod_router.post("/rules/{channel}")
-async def add_moderation_rule(channel: str, rule: ModerationRule, _session: dict = Depends(require_auth)) -> dict:
+async def add_moderation_rule(channel: str, rule: ModerationRule, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     rule_id = await bot_repo.create_moderation_rule(
         channel, rule.name, rule.type, rule.enabled,
         rule.action, rule.severity, rule.settings,
@@ -255,7 +268,8 @@ async def add_moderation_rule(channel: str, rule: ModerationRule, _session: dict
 
 
 @mod_router.put("/rules/{channel}/{rule_id}")
-async def update_moderation_rule(channel: str, rule_id: str, rule: ModerationRule, _session: dict = Depends(require_auth)) -> dict:
+async def update_moderation_rule(channel: str, rule_id: str, rule: ModerationRule, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     updated = await bot_repo.update_moderation_rule(
         channel, rule_id, rule.name, rule.type, rule.enabled,
         rule.action, rule.severity, rule.settings,
@@ -267,7 +281,8 @@ async def update_moderation_rule(channel: str, rule_id: str, rule: ModerationRul
 
 
 @mod_router.delete("/rules/{channel}/{rule_id}")
-async def delete_moderation_rule(channel: str, rule_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def delete_moderation_rule(channel: str, rule_id: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await bot_repo.delete_moderation_rule(channel, rule_id)
     logger.info("Moderation rule %s deleted from channel=%s", rule_id, channel)
     return {"status": "deleted"}

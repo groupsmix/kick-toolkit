@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import Giveaway, GiveawayCreate, GiveawayEntry
 from app.repositories import giveaway as giveaway_repo
 
@@ -14,13 +14,16 @@ router = APIRouter(prefix="/api/giveaway", tags=["giveaway"])
 
 
 @router.get("")
-async def list_giveaways(channel: str = "", _session: dict = Depends(require_auth)) -> list[Giveaway]:
+async def list_giveaways(channel: str = "", session: dict = Depends(require_auth)) -> list[Giveaway]:
+    if channel:
+        require_channel_owner(session, channel)
     rows = await giveaway_repo.list_giveaways(channel)
     return [Giveaway(**row) for row in rows]
 
 
 @router.post("/create")
-async def create_giveaway(data: GiveawayCreate, _session: dict = Depends(require_auth)) -> dict:
+async def create_giveaway(data: GiveawayCreate, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, data.channel)
     result = await giveaway_repo.create(
         title=data.title, channel=data.channel, keyword=data.keyword,
         duration_seconds=data.duration_seconds, max_entries=data.max_entries,
@@ -32,7 +35,7 @@ async def create_giveaway(data: GiveawayCreate, _session: dict = Depends(require
 
 
 @router.get("/{giveaway_id}")
-async def get_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> Giveaway:
+async def get_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> Giveaway:
     gw = await giveaway_repo.get_by_id(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
@@ -40,7 +43,7 @@ async def get_giveaway(giveaway_id: str, _session: dict = Depends(require_auth))
 
 
 @router.post("/{giveaway_id}/enter")
-async def enter_giveaway(giveaway_id: str, entry: GiveawayEntry, _session: dict = Depends(require_auth)) -> dict:
+async def enter_giveaway(giveaway_id: str, entry: GiveawayEntry, session: dict = Depends(require_auth)) -> dict:
     try:
         entry_data, total = await giveaway_repo.add_entry(giveaway_id, entry.username)
     except ValueError as e:
@@ -56,7 +59,7 @@ async def enter_giveaway(giveaway_id: str, entry: GiveawayEntry, _session: dict 
 
 
 @router.post("/{giveaway_id}/roll")
-async def roll_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def roll_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> dict:
     try:
         winner, total, gw_dict = await giveaway_repo.roll_winner(giveaway_id)
     except ValueError as e:
@@ -71,7 +74,7 @@ async def roll_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)
 
 
 @router.post("/{giveaway_id}/reroll")
-async def reroll_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def reroll_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> dict:
     try:
         winner, previous, total = await giveaway_repo.reroll_winner(giveaway_id)
     except ValueError as e:
@@ -86,7 +89,7 @@ async def reroll_giveaway(giveaway_id: str, _session: dict = Depends(require_aut
 
 
 @router.post("/{giveaway_id}/close")
-async def close_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> Giveaway:
+async def close_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> Giveaway:
     gw = await giveaway_repo.close(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
@@ -94,7 +97,7 @@ async def close_giveaway(giveaway_id: str, _session: dict = Depends(require_auth
 
 
 @router.delete("/{giveaway_id}")
-async def delete_giveaway(giveaway_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def delete_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> dict:
     await giveaway_repo.delete(giveaway_id)
     logger.info("Giveaway %s deleted", giveaway_id)
     return {"status": "deleted"}

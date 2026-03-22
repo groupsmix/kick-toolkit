@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import LoyaltySettingsUpdate, LoyaltyRewardCreate, LoyaltyRedeemRequest, PointsAdjustRequest
 from app.repositories import loyalty as loyalty_repo
 
@@ -14,7 +14,8 @@ router = APIRouter(prefix="/api/loyalty", tags=["loyalty"])
 
 
 @router.get("/settings/{channel}")
-async def get_settings(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_settings(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     settings = await loyalty_repo.get_settings(channel)
     if settings:
         return settings
@@ -28,8 +29,9 @@ async def get_settings(channel: str, _session: dict = Depends(require_auth)) -> 
 
 @router.post("/settings/{channel}")
 async def update_settings(
-    channel: str, body: LoyaltySettingsUpdate, _session: dict = Depends(require_auth)
+    channel: str, body: LoyaltySettingsUpdate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await loyalty_repo.upsert_settings(
         channel=channel,
         enabled=body.enabled,
@@ -48,15 +50,17 @@ async def update_settings(
 async def get_leaderboard(
     channel: str,
     limit: int = Query(default=20, le=100),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await loyalty_repo.get_leaderboard(channel, limit)
 
 
 @router.get("/points/{channel}/{username}")
 async def get_user_points(
-    channel: str, username: str, _session: dict = Depends(require_auth)
+    channel: str, username: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     points = await loyalty_repo.get_user_points(channel, username)
     if points:
         return points
@@ -65,22 +69,25 @@ async def get_user_points(
 
 @router.post("/points/{channel}/adjust")
 async def adjust_points(
-    channel: str, body: PointsAdjustRequest, _session: dict = Depends(require_auth)
+    channel: str, body: PointsAdjustRequest, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await loyalty_repo.adjust_points(channel, body.username, body.amount)
     logger.info("Points adjusted for %s in channel=%s: %+d (%s)", body.username, channel, body.amount, body.reason)
     return result
 
 
 @router.get("/rewards/{channel}")
-async def list_rewards(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def list_rewards(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await loyalty_repo.list_rewards(channel)
 
 
 @router.post("/rewards/{channel}")
 async def create_reward(
-    channel: str, body: LoyaltyRewardCreate, _session: dict = Depends(require_auth)
+    channel: str, body: LoyaltyRewardCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await loyalty_repo.create_reward(
         channel=channel, name=body.name, description=body.description,
         cost=body.cost, reward_type=body.type, enabled=body.enabled,
@@ -92,16 +99,18 @@ async def create_reward(
 
 @router.delete("/rewards/{channel}/{reward_id}")
 async def delete_reward(
-    channel: str, reward_id: str, _session: dict = Depends(require_auth)
+    channel: str, reward_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     await loyalty_repo.delete_reward(channel, reward_id)
     return {"status": "deleted"}
 
 
 @router.post("/redeem/{channel}")
 async def redeem_reward(
-    channel: str, body: LoyaltyRedeemRequest, _session: dict = Depends(require_auth)
+    channel: str, body: LoyaltyRedeemRequest, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await loyalty_repo.redeem_reward(channel, body.username, body.reward_id)
     if not result:
         raise HTTPException(status_code=400, detail="Cannot redeem reward. Check balance, availability, and reward status.")
@@ -113,6 +122,7 @@ async def redeem_reward(
 async def list_redemptions(
     channel: str,
     limit: int = Query(default=50, le=200),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await loyalty_repo.list_redemptions(channel, limit)

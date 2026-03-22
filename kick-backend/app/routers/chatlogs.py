@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Query, Depends
 from typing import Optional
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import ChatLogEntry
 from app.repositories import chatlogs as chatlogs_repo
 
@@ -22,8 +22,10 @@ async def get_chat_logs(
     search: Optional[str] = None,
     limit: int = Query(default=100, le=500),
     offset: int = 0,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    if channel:
+        require_channel_owner(session, channel)
     logs, total = await chatlogs_repo.query_logs(
         channel=channel, username=username, flagged_only=flagged_only,
         search=search, limit=limit, offset=offset,
@@ -32,12 +34,13 @@ async def get_chat_logs(
 
 
 @router.get("/user/{username}")
-async def get_user_logs(username: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_user_logs(username: str, session: dict = Depends(require_auth)) -> dict:
     return await chatlogs_repo.get_user_logs(username)
 
 
 @router.post("")
-async def add_chat_log(entry: ChatLogEntry, _session: dict = Depends(require_auth)) -> dict:
+async def add_chat_log(entry: ChatLogEntry, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, entry.channel)
     result = await chatlogs_repo.insert_log(
         channel=entry.channel, username=entry.username,
         message=entry.message, timestamp=entry.timestamp,
@@ -48,5 +51,6 @@ async def add_chat_log(entry: ChatLogEntry, _session: dict = Depends(require_aut
 
 
 @router.get("/stats/{channel}")
-async def get_chat_stats(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_chat_stats(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     return await chatlogs_repo.get_stats(channel)

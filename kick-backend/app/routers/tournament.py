@@ -7,7 +7,7 @@ import random
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import Tournament, TournamentCreate, TournamentMatch, TournamentParticipant
 from app.repositories import tournament as tournament_repo
 from app.services.db import get_conn, _generate_id, _now_iso
@@ -18,13 +18,16 @@ router = APIRouter(prefix="/api/tournament", tags=["tournament"])
 
 
 @router.get("")
-async def list_tournaments(channel: str = "", _session: dict = Depends(require_auth)) -> list[Tournament]:
+async def list_tournaments(channel: str = "", session: dict = Depends(require_auth)) -> list[Tournament]:
+    if channel:
+        require_channel_owner(session, channel)
     rows = await tournament_repo.list_tournaments(channel)
     return [Tournament(**row) for row in rows]
 
 
 @router.post("/create")
-async def create_tournament(data: TournamentCreate, _session: dict = Depends(require_auth)) -> dict:
+async def create_tournament(data: TournamentCreate, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, data.channel)
     result = await tournament_repo.create(
         name=data.name, channel=data.channel, game=data.game,
         max_participants=data.max_participants, fmt=data.format,
@@ -35,7 +38,7 @@ async def create_tournament(data: TournamentCreate, _session: dict = Depends(req
 
 
 @router.get("/{tournament_id}")
-async def get_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> Tournament:
+async def get_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> Tournament:
     t = await tournament_repo.get_by_id(tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
@@ -43,7 +46,7 @@ async def get_tournament(tournament_id: str, _session: dict = Depends(require_au
 
 
 @router.post("/{tournament_id}/register")
-async def register_participant(tournament_id: str, participant: TournamentParticipant, _session: dict = Depends(require_auth)) -> dict:
+async def register_participant(tournament_id: str, participant: TournamentParticipant, session: dict = Depends(require_auth)) -> dict:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
@@ -73,7 +76,7 @@ async def register_participant(tournament_id: str, participant: TournamentPartic
 
 
 @router.post("/{tournament_id}/register-batch")
-async def register_batch(tournament_id: str, usernames: list[str], _session: dict = Depends(require_auth)) -> dict:
+async def register_batch(tournament_id: str, usernames: list[str], session: dict = Depends(require_auth)) -> dict:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
@@ -122,7 +125,7 @@ def _advance_byes(matches: list[dict], current_round: int):
 
 
 @router.post("/{tournament_id}/start")
-async def start_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def start_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> dict:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
@@ -172,7 +175,7 @@ async def start_tournament(tournament_id: str, _session: dict = Depends(require_
 
 
 @router.post("/{tournament_id}/match/{match_id}/winner")
-async def set_match_winner(tournament_id: str, match_id: str, winner: str, _session: dict = Depends(require_auth)) -> dict:
+async def set_match_winner(tournament_id: str, match_id: str, winner: str, session: dict = Depends(require_auth)) -> dict:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
@@ -224,14 +227,14 @@ async def set_match_winner(tournament_id: str, match_id: str, winner: str, _sess
 
 
 @router.delete("/{tournament_id}")
-async def delete_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def delete_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> dict:
     await tournament_repo.delete(tournament_id)
     logger.info("Tournament %s deleted", tournament_id)
     return {"status": "deleted"}
 
 
 @router.post("/{tournament_id}/reset")
-async def reset_tournament(tournament_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def reset_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> dict:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
