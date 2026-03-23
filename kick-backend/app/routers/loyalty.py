@@ -27,7 +27,7 @@ async def get_settings(channel: str, session: dict = Depends(require_auth)) -> d
     }
 
 
-@router.post("/settings/{channel}")
+@router.put("/settings/{channel}")
 async def update_settings(
     channel: str, body: LoyaltySettingsUpdate, session: dict = Depends(require_auth)
 ) -> dict:

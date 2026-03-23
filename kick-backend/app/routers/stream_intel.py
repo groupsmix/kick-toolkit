@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import StreamIntelSessionCreate
 from app.repositories import stream_intel as stream_intel_repo
 
@@ -14,7 +14,8 @@ router = APIRouter(prefix="/api/stream-intel", tags=["stream-intelligence"])
 
 
 @router.get("/overview/{channel}")
-async def get_overview(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_overview(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     return await stream_intel_repo.get_overview(channel)
 
 
@@ -22,15 +23,17 @@ async def get_overview(channel: str, _session: dict = Depends(require_auth)) -> 
 async def get_sessions(
     channel: str,
     limit: int = Query(default=20, le=50),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await stream_intel_repo.get_sessions(channel, limit)
 
 
 @router.post("/sessions")
 async def create_session(
-    body: StreamIntelSessionCreate, _session: dict = Depends(require_auth)
+    body: StreamIntelSessionCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, body.channel)
     result = await stream_intel_repo.create_session(
         channel=body.channel,
         duration_minutes=body.duration_minutes,
@@ -48,7 +51,8 @@ async def create_session(
 
 
 @router.get("/score/{channel}")
-async def get_score(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_score(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     score = await stream_intel_repo.get_stream_score(channel)
     if not score:
         return {
@@ -59,5 +63,6 @@ async def get_score(channel: str, _session: dict = Depends(require_auth)) -> dic
 
 
 @router.get("/best-times/{channel}")
-async def get_best_times(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def get_best_times(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await stream_intel_repo.get_best_times(channel)

@@ -2,10 +2,10 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import RevenueEntryCreate
 from app.repositories import revenue as revenue_repo
 
@@ -15,7 +15,8 @@ router = APIRouter(prefix="/api/revenue", tags=["revenue"])
 
 
 @router.get("/summary/{channel}")
-async def get_summary(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_summary(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     return await revenue_repo.get_summary(channel)
 
 
@@ -23,8 +24,9 @@ async def get_summary(channel: str, _session: dict = Depends(require_auth)) -> d
 async def get_entries(
     channel: str,
     limit: int = Query(default=100, le=500),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await revenue_repo.get_entries(channel, limit)
 
 
@@ -32,8 +34,9 @@ async def get_entries(
 async def create_entry(
     channel: str,
     body: RevenueEntryCreate,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await revenue_repo.create_entry(
         channel=channel,
         source=body.source,
@@ -51,12 +54,13 @@ async def create_entry(
 async def delete_entry(entry_id: str, _session: dict = Depends(require_auth)) -> dict:
     deleted = await revenue_repo.delete_entry(entry_id)
     if not deleted:
-        return {"error": "Entry not found"}
+        raise HTTPException(status_code=404, detail="Entry not found")
     return {"deleted": True}
 
 
 @router.get("/export/{channel}")
-async def export_csv(channel: str, _session: dict = Depends(require_auth)) -> PlainTextResponse:
+async def export_csv(channel: str, session: dict = Depends(require_auth)) -> PlainTextResponse:
+    require_channel_owner(session, channel)
     csv_data = await revenue_repo.export_csv(channel)
     return PlainTextResponse(
         content=csv_data,

@@ -79,13 +79,15 @@ async def translate_text(
             "was_translated": False,
         }
 
-    # Placeholder: In production, call external translation API here
-    # For now, return original text with detected language info
+    # Translation API not yet integrated — return original text with a coming-soon note.
+    # To enable real translation, integrate with Google Translate API, DeepL API, or
+    # LibreTranslate and set the appropriate API key in environment variables.
     return {
         "original_text": text,
         "translated_text": text,
         "source_language": detected,
         "target_language": target_language,
         "was_translated": False,
-        "note": "Translation API not configured. Set TRANSLATION_API_KEY to enable.",
+        "status": "coming_soon",
+        "note": "Translation is coming soon. Set TRANSLATION_API_KEY to enable.",
     }

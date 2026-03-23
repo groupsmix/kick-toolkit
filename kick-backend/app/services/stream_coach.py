@@ -5,6 +5,7 @@ Analyzes stream metrics and chat data to generate real-time coaching suggestions
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -15,6 +16,18 @@ logger = logging.getLogger(__name__)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
+
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=15.0,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+    return _http_client
 
 
 async def analyze_stream(
@@ -169,17 +182,17 @@ Previous suggestions given: {len(suggestions)}
 Provide brief, actionable coaching tips. Be encouraging but direct. Focus on engagement, content, and viewer retention. Format as a short bulleted list."""
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                OPENAI_CHAT_URL,
-                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                json={
-                    "model": "gpt-4o-mini",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 300,
-                    "temperature": 0.7,
-                },
-            )
+        client = _get_http_client()
+        response = await client.post(
+            OPENAI_CHAT_URL,
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.7,
+            },
+        )
 
         if response.status_code != 200:
             logger.error("OpenAI API error: %s %s", response.status_code, response.text)
@@ -366,6 +379,10 @@ _POSITIVE_KEYWORDS = [
     "beautiful", "perfect", "legendary", "epic",
 ]
 
+# Pre-compiled regex patterns for O(1) keyword matching per message
+_NEGATIVE_RE = re.compile("|".join(re.escape(kw) for kw in _NEGATIVE_KEYWORDS), re.IGNORECASE)
+_POSITIVE_RE = re.compile("|".join(re.escape(kw) for kw in _POSITIVE_KEYWORDS), re.IGNORECASE)
+
 
 async def _get_recent_messages(channel: str, started_at: str, limit: int = 50) -> list[str]:
     """Fetch recent chat messages for sentiment analysis."""
@@ -393,15 +410,10 @@ def _score_sentiment(messages: list[str]) -> dict:
     negative_count = 0
 
     for msg in messages:
-        lower = msg.lower()
-        for kw in _NEGATIVE_KEYWORDS:
-            if kw in lower:
-                negative_count += 1
-                break
-        for kw in _POSITIVE_KEYWORDS:
-            if kw in lower:
-                positive_count += 1
-                break
+        if _NEGATIVE_RE.search(msg):
+            negative_count += 1
+        if _POSITIVE_RE.search(msg):
+            positive_count += 1
 
     total = len(messages)
     pos_ratio = positive_count / total if total > 0 else 0

@@ -73,12 +73,22 @@ async def analyze_giveaway_entries(giveaway_id: str, channel: str) -> list[dict]
     entries = await _get_giveaway_entrants(giveaway_id)
     flags: list[dict] = []
 
-    # Pairwise fingerprint comparison
+    # Build a fingerprint lookup per entry in O(n) calls instead of O(n²)
+    entry_fingerprints: dict[str, set[str]] = {}
+    for entry in entries:
+        matches = await fp_svc.find_matching_fingerprints(entry, channel)
+        entry_fingerprints[entry] = {m["username"].lower() for m in matches}
+
+    # Compare using pre-fetched data — O(n²) comparisons but no extra I/O
+    seen_pairs: set[tuple[str, str]] = set()
     for i, entry_a in enumerate(entries):
         for entry_b in entries[i + 1:]:
-            matches = await fp_svc.find_matching_fingerprints(entry_a, channel)
-            matched_names = [m["username"] for m in matches]
-            if entry_b.lower() in [n.lower() for n in matched_names]:
+            pair = (min(entry_a.lower(), entry_b.lower()), max(entry_a.lower(), entry_b.lower()))
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+
+            if entry_b.lower() in entry_fingerprints.get(entry_a, set()):
                 flag = await _record_fraud_flag(
                     giveaway_id, entry_a, "fingerprint_match", entry_b, 0.95,
                 )

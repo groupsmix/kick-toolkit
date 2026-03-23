@@ -15,12 +15,36 @@ logger = logging.getLogger(__name__)
 _chat_windows: dict[str, list[tuple[str, float]]] = defaultdict(list)
 _known_chatters: dict[str, set[str]] = defaultdict(set)
 
+# Bounds to prevent unbounded memory growth
+_MAX_CHANNELS = 500
+_MAX_EVENTS_PER_CHANNEL = 5_000
+_MAX_KNOWN_CHATTERS_PER_CHANNEL = 10_000
+
 
 def record_chat_event(channel: str, username: str) -> None:
     """Record a chat event for raid detection (in-memory)."""
     now = time.time()
+
+    # Evict oldest channels if we exceed the channel limit
+    if channel not in _chat_windows and len(_chat_windows) >= _MAX_CHANNELS:
+        oldest = next(iter(_chat_windows))
+        del _chat_windows[oldest]
+        _known_chatters.pop(oldest, None)
+
     _chat_windows[channel].append((username, now))
-    _known_chatters[channel].add(username.lower())
+
+    # Cap per-channel event list to prevent unbounded growth
+    if len(_chat_windows[channel]) > _MAX_EVENTS_PER_CHANNEL:
+        _chat_windows[channel] = _chat_windows[channel][-_MAX_EVENTS_PER_CHANNEL:]
+
+    chatters = _known_chatters[channel]
+    chatters.add(username.lower())
+    # Cap known chatters set size
+    if len(chatters) > _MAX_KNOWN_CHATTERS_PER_CHANNEL:
+        # Remove arbitrary entries to bring under limit
+        excess = len(chatters) - _MAX_KNOWN_CHATTERS_PER_CHANNEL
+        for _ in range(excess):
+            chatters.pop()
 
 
 def _clean_window(channel: str, window_seconds: int) -> None:

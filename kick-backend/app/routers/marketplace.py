@@ -203,13 +203,19 @@ async def purchase_item(
     if existing:
         raise HTTPException(status_code=409, detail="You already own this item")
 
-    # For free items, complete immediately; for paid items, this would go through
-    # a payment flow (Stripe Connect / LemonSqueezy) in production
+    # Only allow free items to be purchased directly; paid items require
+    # a payment flow (Stripe Connect / LemonSqueezy) that is not yet implemented.
+    if item["price"] and item["price"] > 0:
+        raise HTTPException(
+            status_code=402,
+            detail="Paid purchases require a payment flow. This feature is coming soon.",
+        )
+
     purchase = await mp_repo.create_purchase(
         item_id=item_id,
         buyer_user_id=user_id,
         seller_id=item["seller_id"],
-        price_paid=item["price"],
+        price_paid=0,
     )
     return purchase
 

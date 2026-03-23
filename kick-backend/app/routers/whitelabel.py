@@ -1,11 +1,10 @@
 """White-Label Platform (B2B) router."""
 
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import extract_user_id, require_auth
 from app.models.schemas import (
     OrganizationCreate, OrganizationUpdate,
     OrgMemberAdd, OrgBrandingUpdate, OrgSettingsUpdate,
@@ -17,23 +16,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/whitelabel", tags=["whitelabel"])
 
 
-def _get_user_id(session: dict) -> str:
-    """Extract user_id from session, handling JSON-encoded user_data."""
-    user_data = session.get("user_data")
-    if isinstance(user_data, str):
-        try:
-            user_data = json.loads(user_data)
-        except (json.JSONDecodeError, TypeError):
-            return ""
-    return str(user_data.get("user_id", "")) if user_data else ""
-
-
 async def _require_org_member(org_id: str, session: dict) -> dict:
     """Verify user is a member of the org. Returns org dict."""
     org = await wl_repo.get_org(org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    user_id = _get_user_id(session)
+    user_id = extract_user_id(session)
     members = await wl_repo.get_members(org_id)
     member_ids = {m["user_id"] for m in members}
     if user_id != org.get("owner_user_id") and user_id not in member_ids:
@@ -46,7 +34,7 @@ async def _require_org_owner(org_id: str, session: dict) -> dict:
     org = await wl_repo.get_org(org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    user_id = _get_user_id(session)
+    user_id = extract_user_id(session)
     if user_id != org.get("owner_user_id"):
         raise HTTPException(status_code=403, detail="Only the org owner can perform this action")
     return org
@@ -64,7 +52,7 @@ async def create_org(
     existing = await wl_repo.get_org_by_slug(body.slug)
     if existing:
         raise HTTPException(status_code=409, detail="Organization slug already taken")
-    owner_id = _get_user_id(session) or session.get("session_id", "")
+    owner_id = extract_user_id(session)
     return await wl_repo.create_org(
         name=body.name, slug=body.slug, owner_user_id=owner_id,
         plan=body.plan, max_members=body.max_members, custom_domain=body.custom_domain,
@@ -73,7 +61,7 @@ async def create_org(
 
 @router.get("/orgs")
 async def list_user_orgs(session: dict = Depends(require_auth)) -> list[dict]:
-    user_id = _get_user_id(session) or session.get("session_id", "")
+    user_id = extract_user_id(session)
     return await wl_repo.get_user_orgs(user_id)
 
 

@@ -15,7 +15,7 @@ export function AuthCallbackPage() {
     // query params to prevent it from leaking via Referer headers.
     const fragment = window.location.hash.replace(/^#/, "");
     const fragmentParams = new URLSearchParams(fragment);
-    const sessionId = fragmentParams.get("session_id") || params.get("session_id");
+    const sessionId = fragmentParams.get("session_id");
 
     // Case 1: Redirected back from backend with session_id
     if (sessionId) {

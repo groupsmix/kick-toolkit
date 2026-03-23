@@ -60,6 +60,11 @@ async def enter_giveaway(giveaway_id: str, entry: GiveawayEntry, session: dict =
 
 @router.post("/{giveaway_id}/roll")
 async def roll_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> dict:
+    # Verify ownership by looking up the giveaway's channel
+    gw = await giveaway_repo.get_by_id(giveaway_id)
+    if not gw:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, gw["channel"])
     try:
         winner, total, gw_dict = await giveaway_repo.roll_winner(giveaway_id)
     except ValueError as e:
@@ -75,6 +80,10 @@ async def roll_giveaway(giveaway_id: str, session: dict = Depends(require_auth))
 
 @router.post("/{giveaway_id}/reroll")
 async def reroll_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> dict:
+    gw = await giveaway_repo.get_by_id(giveaway_id)
+    if not gw:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, gw["channel"])
     try:
         winner, previous, total = await giveaway_repo.reroll_winner(giveaway_id)
     except ValueError as e:
@@ -90,6 +99,10 @@ async def reroll_giveaway(giveaway_id: str, session: dict = Depends(require_auth
 
 @router.post("/{giveaway_id}/close")
 async def close_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> Giveaway:
+    existing = await giveaway_repo.get_by_id(giveaway_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, existing["channel"])
     gw = await giveaway_repo.close(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
@@ -98,6 +111,10 @@ async def close_giveaway(giveaway_id: str, session: dict = Depends(require_auth)
 
 @router.delete("/{giveaway_id}")
 async def delete_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) -> dict:
+    gw = await giveaway_repo.get_by_id(giveaway_id)
+    if not gw:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, gw["channel"])
     await giveaway_repo.delete(giveaway_id)
     logger.info("Giveaway %s deleted", giveaway_id)
     return {"status": "deleted"}

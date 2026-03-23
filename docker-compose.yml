@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: kicktools
-      POSTGRES_PASSWORD: kicktools
-      POSTGRES_DB: kicktools
+      POSTGRES_USER: ${POSTGRES_USER:-kicktools}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-kicktools}
     ports:
       - "5432:5432"
     volumes:

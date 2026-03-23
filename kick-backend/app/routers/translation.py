@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import TranslationRequest, TranslationSettingsUpdate
 from app.repositories import translation as translation_repo
 from app.services.translation import translate_text, SUPPORTED_LANGUAGES, detect_language
@@ -35,8 +35,9 @@ async def detect(text: str, _session: dict = Depends(require_auth)) -> dict:
 
 @router.get("/settings/{channel}")
 async def get_settings(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     settings = await translation_repo.get_settings(channel)
     if settings:
         return settings
@@ -50,8 +51,9 @@ async def get_settings(
 @router.post("/settings/{channel}")
 async def update_settings(
     channel: str, body: TranslationSettingsUpdate,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await translation_repo.upsert_settings(
         channel, body.enabled, body.target_language,
         body.auto_translate, body.show_original,
