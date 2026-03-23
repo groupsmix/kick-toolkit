@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.routers.auth import router as auth_router
 from app.routers.bot import router as bot_router, mod_router
@@ -86,6 +88,23 @@ ALLOWED_ORIGINS = os.environ.get(
 ).split(",")
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to every response to mitigate XSS and other attacks."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; connect-src 'self' https:; "
+            "frame-ancestors 'none'"
+        )
+        return response
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     await init_pool()
@@ -102,6 +121,12 @@ app = FastAPI(
     dependencies=[Depends(_rate_limit)],
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
+# CSRF Protection: State-changing endpoints use Bearer token auth (Authorization
+# header) which is not automatically attached by browsers, providing inherent CSRF
+# protection. The CORS policy below restricts origins to the frontend domain.
+# If cookie-based auth is ever added, a CSRF token middleware (e.g. starlette-csrf)
+# should be integrated.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

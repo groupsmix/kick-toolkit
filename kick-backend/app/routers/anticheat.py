@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import (
     RaidEvent,
     RaidSettings,
@@ -26,14 +26,16 @@ router = APIRouter(prefix="/api/anticheat", tags=["anticheat"])
 @router.get("/raids")
 async def list_raids(
     channel: str = "",
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[RaidEvent]:
+    if channel:
+        require_channel_owner(session, channel)
     rows = await anticheat_repo.list_raids(channel or None)
     return [RaidEvent(**r) for r in rows]
 
 
 @router.post("/raids/{raid_id}/resolve")
-async def resolve_raid(raid_id: int, _session: dict = Depends(require_auth)) -> dict:
+async def resolve_raid(raid_id: int, session: dict = Depends(require_auth)) -> dict:
     result = await anticheat_repo.resolve_raid(raid_id)
     if not result:
         raise HTTPException(status_code=404, detail="Raid event not found")
@@ -42,7 +44,7 @@ async def resolve_raid(raid_id: int, _session: dict = Depends(require_auth)) -> 
 
 
 @router.get("/raid-settings")
-async def get_raid_settings(_session: dict = Depends(require_auth)) -> RaidSettings:
+async def get_raid_settings(session: dict = Depends(require_auth)) -> RaidSettings:
     settings = await anticheat_repo.get_raid_settings()
     return RaidSettings(**settings)
 
@@ -50,7 +52,7 @@ async def get_raid_settings(_session: dict = Depends(require_auth)) -> RaidSetti
 @router.put("/raid-settings")
 async def update_raid_settings(
     settings: RaidSettings,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> RaidSettings:
     result = await anticheat_repo.upsert_raid_settings(
         settings.enabled,
@@ -64,8 +66,9 @@ async def update_raid_settings(
 
 
 @router.post("/raids/check")
-async def check_raid(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def check_raid(channel: str, session: dict = Depends(require_auth)) -> dict:
     """Manually trigger a raid check for a channel."""
+    require_channel_owner(session, channel)
     result = await raid_svc.check_for_raid(channel)
     if result:
         return {"detected": True, "raid": result}
@@ -78,7 +81,7 @@ async def check_raid(channel: str, _session: dict = Depends(require_auth)) -> di
 @router.get("/giveaway-fraud/{giveaway_id}")
 async def get_giveaway_fraud_flags(
     giveaway_id: str,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[GiveawayFraudFlag]:
     rows = await fraud_svc.get_fraud_flags(giveaway_id)
     return [GiveawayFraudFlag(**r) for r in rows]
@@ -87,7 +90,7 @@ async def get_giveaway_fraud_flags(
 @router.post("/giveaway-fraud/{giveaway_id}/analyze")
 async def analyze_giveaway(
     giveaway_id: str,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
     """Run fraud analysis on all entries in a giveaway."""
     # Get channel from giveaway
@@ -105,7 +108,7 @@ async def analyze_giveaway(
 @router.post("/giveaway-fraud/review")
 async def review_fraud_flag(
     req: FraudReviewRequest,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
     result = await fraud_svc.review_fraud_flag(req.flag_id, req.action)
     if not result:

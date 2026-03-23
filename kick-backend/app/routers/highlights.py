@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.repositories import highlights as highlights_repo
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,9 @@ router = APIRouter(prefix="/api/highlights", tags=["highlights"])
 async def get_summary(
     channel: str,
     session_id: str | None = Query(default=None),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    require_channel_owner(session, channel)
     return await highlights_repo.get_summary(channel, session_id=session_id)
 
 
@@ -26,8 +27,9 @@ async def get_highlights(
     channel: str,
     session_id: str | None = Query(default=None),
     limit: int = Query(default=50, le=200),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await highlights_repo.get_highlights(channel, session_id=session_id, limit=limit)
 
 

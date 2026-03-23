@@ -142,7 +142,9 @@ class RiskScoringEngine:
 
         weights = {name: DEFAULT_WEIGHTS.get(name, 1.0) for name in feature_names}
         learning_rate = 0.1
-        epochs = 50
+        l2_lambda = 0.01  # L2 regularization strength to prevent overfitting
+        epochs = 200
+        patience = 10  # Early stopping patience
 
         samples: list[tuple[dict[str, float], float]] = []
         for action_row in actions:
@@ -153,8 +155,13 @@ class RiskScoringEngine:
             label = 1.0 if action_row["action"] in positive_actions else 0.0
             samples.append((features, label))
 
-        # Simple gradient descent
+        # Gradient descent with L2 regularization and early stopping
+        best_loss = float("inf")
+        best_weights: dict[str, float] = weights.copy()
+        no_improve_count = 0
+
         for _ in range(epochs):
+            epoch_loss = 0.0
             for features, label in samples:
                 # Forward pass
                 z = sum(
@@ -164,12 +171,36 @@ class RiskScoringEngine:
                 prediction = _sigmoid(z)
                 error = prediction - label
 
-                # Update weights
+                # Cross-entropy loss + L2 penalty
+                eps = 1e-15
+                sample_loss = -(
+                    label * math.log(prediction + eps)
+                    + (1 - label) * math.log(1 - prediction + eps)
+                )
+                epoch_loss += sample_loss
+
+                # Update weights with L2 regularization
                 for name in feature_names:
-                    gradient = error * features.get(name, 0.0)
+                    gradient = error * features.get(name, 0.0) + l2_lambda * weights[name]
                     weights[name] -= learning_rate * gradient
                     # Clamp weights to reasonable range
                     weights[name] = max(0.1, min(weights[name], 10.0))
+
+            # L2 penalty term added to total loss
+            l2_penalty = (l2_lambda / 2) * sum(w * w for w in weights.values())
+            epoch_loss = epoch_loss / len(samples) + l2_penalty
+
+            # Early stopping: track best weights
+            if epoch_loss < best_loss - 1e-6:
+                best_loss = epoch_loss
+                best_weights = weights.copy()
+                no_improve_count = 0
+            else:
+                no_improve_count += 1
+                if no_improve_count >= patience:
+                    break
+
+        weights = best_weights
 
         # Save updated weights
         now = _now_iso()

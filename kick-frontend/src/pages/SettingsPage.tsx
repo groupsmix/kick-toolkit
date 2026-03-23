@@ -36,14 +36,25 @@ export function SettingsPage() {
   const currentPlan = subData?.plan?.name || "Free";
   const planId = subData?.plan?.id || "free";
 
-  // Notification preferences (stored locally for now)
-  const [notifications, setNotifications] = useState({
-    moderation_alerts: true,
-    giveaway_complete: true,
-    tournament_updates: true,
-    weekly_summary: false,
-    browser_push: false,
+  // Notification preferences (persisted to localStorage)
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kick_notification_prefs");
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore parse errors */ }
+    return {
+      moderation_alerts: true,
+      giveaway_complete: true,
+      tournament_updates: true,
+      weekly_summary: false,
+      browser_push: false,
+    };
   });
+
+  const updateNotifications = (updated: typeof notifications) => {
+    setNotifications(updated);
+    localStorage.setItem("kick_notification_prefs", JSON.stringify(updated));
+  };
 
   // Timezone
   const [timezone, setTimezone] = useState(
@@ -172,7 +183,7 @@ export function SettingsPage() {
             <Switch
               checked={notifications.moderation_alerts}
               onCheckedChange={(v) =>
-                setNotifications({ ...notifications, moderation_alerts: v })
+                updateNotifications({ ...notifications, moderation_alerts: v })
               }
             />
           </div>
@@ -187,7 +198,7 @@ export function SettingsPage() {
             <Switch
               checked={notifications.giveaway_complete}
               onCheckedChange={(v) =>
-                setNotifications({ ...notifications, giveaway_complete: v })
+                updateNotifications({ ...notifications, giveaway_complete: v })
               }
             />
           </div>
@@ -202,7 +213,7 @@ export function SettingsPage() {
             <Switch
               checked={notifications.tournament_updates}
               onCheckedChange={(v) =>
-                setNotifications({ ...notifications, tournament_updates: v })
+                updateNotifications({ ...notifications, tournament_updates: v })
               }
             />
           </div>
@@ -217,7 +228,7 @@ export function SettingsPage() {
             <Switch
               checked={notifications.weekly_summary}
               onCheckedChange={(v) =>
-                setNotifications({ ...notifications, weekly_summary: v })
+                updateNotifications({ ...notifications, weekly_summary: v })
               }
             />
           </div>
@@ -232,7 +243,7 @@ export function SettingsPage() {
             <Switch
               checked={notifications.browser_push}
               onCheckedChange={(v) => {
-                setNotifications({ ...notifications, browser_push: v });
+                updateNotifications({ ...notifications, browser_push: v });
                 if (v) {
                   toast.info(
                     "Browser notifications will be available in a future update."

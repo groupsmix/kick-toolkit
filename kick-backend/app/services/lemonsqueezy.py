@@ -23,6 +23,18 @@ PLAN_VARIANT_IDS = {
 
 LEMON_API_BASE = "https://api.lemonsqueezy.com/v1"
 
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=15.0,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+    return _http_client
+
 
 def _headers() -> dict[str, str]:
     return {
@@ -81,32 +93,27 @@ async def create_checkout(
     if user_name:
         payload["data"]["attributes"]["checkout_data"]["name"] = user_name
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{LEMON_API_BASE}/checkouts",
-            json=payload,
-            headers=_headers(),
-            timeout=15.0,
-        )
+    client = _get_http_client()
+    response = await client.post(
+        f"{LEMON_API_BASE}/checkouts",
+        json=payload,
+        headers=_headers(),
+    )
 
-        if response.status_code not in (200, 201):
-            logger.error("LemonSqueezy checkout error: %s %s", response.status_code, response.text)
-            return None
+    if response.status_code not in (200, 201):
+        logger.error("LemonSqueezy checkout error: %s %s", response.status_code, response.text)
+        return None
 
-        data = response.json()
-        checkout_url = data.get("data", {}).get("attributes", {}).get("url")
-        return checkout_url
+    data = response.json()
+    checkout_url = data.get("data", {}).get("attributes", {}).get("url")
+    return checkout_url
 
 
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     """Verify the LemonSqueezy webhook signature."""
     if not LEMON_WEBHOOK_SECRET:
-        # Only allow bypass in explicit dev mode, never in production
-        if os.environ.get("APP_ENV") == "development":
-            logger.warning("LEMONSQUEEZY_WEBHOOK_SECRET not set — DEV MODE bypass")
-            return True
         logger.error("LEMONSQUEEZY_WEBHOOK_SECRET not set — rejecting webhook")
-        return False  # Fail closed in production
+        return False
 
     computed = hmac.new(
         LEMON_WEBHOOK_SECRET.encode("utf-8"),

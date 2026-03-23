@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import PredictionCreate, PredictionBet, PredictionResolve
 from app.repositories import predictions as predictions_repo
 
@@ -15,8 +15,9 @@ router = APIRouter(prefix="/api/predictions", tags=["predictions"])
 
 @router.post("/{channel}")
 async def create_prediction(
-    channel: str, body: PredictionCreate, _session: dict = Depends(require_auth)
+    channel: str, body: PredictionCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     if len(body.outcomes) < 2:
         raise HTTPException(status_code=400, detail="Prediction must have at least 2 outcomes")
     if len(body.outcomes) > 10:
@@ -32,15 +33,17 @@ async def create_prediction(
 async def list_predictions(
     channel: str,
     limit: int = Query(default=20, le=100),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await predictions_repo.list_predictions(channel, limit)
 
 
 @router.get("/{channel}/{pred_id}")
 async def get_prediction(
-    channel: str, pred_id: str, _session: dict = Depends(require_auth)
+    channel: str, pred_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await predictions_repo.get_prediction_details(channel, pred_id)
     if not result:
         raise HTTPException(status_code=404, detail="Prediction not found")
@@ -50,8 +53,9 @@ async def get_prediction(
 @router.post("/{channel}/{pred_id}/bet")
 async def place_bet(
     channel: str, pred_id: str, body: PredictionBet,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    require_channel_owner(session, channel)
     if body.amount <= 0:
         raise HTTPException(status_code=400, detail="Bet amount must be positive")
     result = await predictions_repo.place_bet(
@@ -71,8 +75,9 @@ async def place_bet(
 
 @router.post("/{channel}/{pred_id}/lock")
 async def lock_prediction(
-    channel: str, pred_id: str, _session: dict = Depends(require_auth)
+    channel: str, pred_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await predictions_repo.lock_prediction(channel, pred_id)
     if not result:
         raise HTTPException(status_code=404, detail="Prediction not found or already locked")
@@ -83,8 +88,9 @@ async def lock_prediction(
 @router.post("/{channel}/{pred_id}/resolve")
 async def resolve_prediction(
     channel: str, pred_id: str, body: PredictionResolve,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await predictions_repo.resolve_prediction(channel, pred_id, body.winning_index)
     if not result:
         raise HTTPException(status_code=400, detail="Cannot resolve. Prediction may already be resolved.")
@@ -94,8 +100,9 @@ async def resolve_prediction(
 
 @router.post("/{channel}/{pred_id}/cancel")
 async def cancel_prediction(
-    channel: str, pred_id: str, _session: dict = Depends(require_auth)
+    channel: str, pred_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await predictions_repo.cancel_prediction(channel, pred_id)
     if not result:
         raise HTTPException(status_code=404, detail="Prediction not found")

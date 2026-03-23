@@ -210,8 +210,9 @@ async def check_welcome(req: WelcomeCheckRequest, _session: dict = Depends(requi
 # ========== Shoutout ==========
 
 @router.post("/shoutout/{channel}")
-async def shoutout(channel: str, req: ShoutoutRequest, _session: dict = Depends(require_auth)) -> ShoutoutResult:
+async def shoutout(channel: str, req: ShoutoutRequest, session: dict = Depends(require_auth)) -> ShoutoutResult:
     """Generate a shoutout message for a target user by fetching their Kick profile."""
+    require_channel_owner(session, channel)
     profile = await get_user_profile(req.target_username)
 
     config = await bot_repo.get_config(channel)
