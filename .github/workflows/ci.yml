@@ -16,6 +16,7 @@ jobs:
       package-manager: npm
       working-directory: kick-frontend
       install-command: "npm ci"
+      lint-command: "npm run lint"
       test-command: "echo 'No tests configured'"
 
   ci-backend:
@@ -41,6 +42,7 @@ jobs:
       install-command: "npm ci"
       run-formatter: false
       run-typecheck: true
+      typecheck-command: "npx tsc --noEmit"
       run-coverage: false
 
   quality-backend:
@@ -67,3 +69,4 @@ jobs:
       package-manager: npm
       working-directory: kick-frontend
       install-command: "npm ci"
+      build-command: "npm run build"
