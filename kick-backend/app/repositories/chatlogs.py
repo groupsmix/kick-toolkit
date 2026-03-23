@@ -25,8 +25,9 @@ async def query_logs(
     if flagged_only:
         conditions.append("flagged = TRUE")
     if search:
-        conditions.append("(lower(message) LIKE %s OR lower(username) LIKE %s)")
-        pattern = f"%{search.lower()}%"
+        conditions.append("(lower(message) LIKE %s ESCAPE '\\' OR lower(username) LIKE %s ESCAPE '\\')")
+        escaped = search.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
         params.extend([pattern, pattern])
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""

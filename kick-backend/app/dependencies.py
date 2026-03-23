@@ -94,4 +94,13 @@ async def require_auth(authorization: str = Header(..., description="Bearer <ses
             logger.warning("Malformed expires_at for session %s: %r", session_id, expires_at)
             raise HTTPException(status_code=401, detail="Invalid session — please log in again")
 
-    return dict(session)
+    session_dict = dict(session)
+    # Normalize user_data once at the auth boundary so downstream code always gets a dict
+    ud = session_dict.get("user_data", {})
+    if isinstance(ud, str):
+        try:
+            ud = json.loads(ud)
+        except (json.JSONDecodeError, TypeError):
+            ud = {}
+    session_dict["user_data"] = ud
+    return session_dict

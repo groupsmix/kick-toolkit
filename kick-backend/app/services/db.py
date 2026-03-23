@@ -15,8 +15,8 @@ from app.services.schema import all_schemas
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 # Connection pool sizing — configurable via env vars
-_POOL_MIN_SIZE = int(os.environ.get("DB_POOL_MIN_SIZE", "2"))
-_POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "10"))
+_POOL_MIN_SIZE = int(os.environ.get("DB_POOL_MIN_SIZE", "5"))
+_POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "25"))
 
 pool: Optional[AsyncConnectionPool] = None
 

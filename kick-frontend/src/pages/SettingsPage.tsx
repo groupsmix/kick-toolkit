@@ -56,10 +56,19 @@ export function SettingsPage() {
     localStorage.setItem("kick_notification_prefs", JSON.stringify(updated));
   };
 
-  // Timezone
-  const [timezone, setTimezone] = useState(
-    Intl.DateTimeFormat().resolvedOptions().timeZone
-  );
+  // Timezone (persisted to localStorage)
+  const [timezone, setTimezone] = useState(() => {
+    try {
+      const saved = localStorage.getItem("kick_timezone");
+      if (saved) return saved;
+    } catch { /* ignore read errors */ }
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  });
+
+  const updateTimezone = (tz: string) => {
+    setTimezone(tz);
+    localStorage.setItem("kick_timezone", tz);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -271,7 +280,7 @@ export function SettingsPage() {
             </Label>
             <Input
               value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
+              onChange={(e) => updateTimezone(e.target.value)}
               className="bg-zinc-800 border-zinc-700 text-white mt-1 max-w-sm"
               placeholder="America/New_York"
             />
