@@ -11,12 +11,34 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
+from cryptography.fernet import Fernet
 
 from app.services.db import get_conn
 
 SESSION_LIFETIME_HOURS = int(os.environ.get("SESSION_LIFETIME_HOURS", "168"))  # 7 days
 
 logger = logging.getLogger(__name__)
+
+# Token encryption at rest — generate once with Fernet.generate_key(), store in env
+TOKEN_ENCRYPTION_KEY = os.environ.get("TOKEN_ENCRYPTION_KEY", "")
+_fernet = Fernet(TOKEN_ENCRYPTION_KEY.encode()) if TOKEN_ENCRYPTION_KEY else None
+
+
+def encrypt_token(token: str) -> str:
+    """Encrypt a token for storage. Falls back to plaintext when key is not configured."""
+    if _fernet and token:
+        return _fernet.encrypt(token.encode()).decode()
+    return token
+
+
+def decrypt_token(encrypted: str) -> str:
+    """Decrypt a stored token. Gracefully handles plaintext values during migration."""
+    if _fernet and encrypted:
+        try:
+            return _fernet.decrypt(encrypted.encode()).decode()
+        except Exception:
+            return encrypted  # Already plaintext (migration period)
+    return encrypted
 
 KICK_AUTH_URL = "https://id.kick.com/oauth/authorize"
 KICK_TOKEN_URL = "https://id.kick.com/oauth/token"
@@ -135,7 +157,9 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
                    scope = EXCLUDED.scope,
                    user_data = EXCLUDED.user_data,
                    expires_at = EXCLUDED.expires_at""",
-            (session_id, token_data.get("access_token"), token_data.get("refresh_token"),
+            (session_id,
+             encrypt_token(token_data.get("access_token", "")),
+             encrypt_token(token_data.get("refresh_token", "")),
              token_data.get("expires_in"), token_data.get("token_type"),
              token_data.get("scope"), json.dumps(user_data),
              now.isoformat(), expires_at.isoformat()),
@@ -178,7 +202,8 @@ async def refresh_session(session_id: str) -> Optional[dict]:
         await conn.execute(
             """UPDATE sessions SET access_token = %s, refresh_token = %s, expires_in = %s
                WHERE session_id = %s""",
-            (token_data.get("access_token"), token_data.get("refresh_token"),
+            (encrypt_token(token_data.get("access_token", "")),
+             encrypt_token(token_data.get("refresh_token", "")),
              token_data.get("expires_in"), session_id),
         )
         await conn.commit()
@@ -201,9 +226,10 @@ async def revoke_session(session_id: str) -> bool:
 
     access_token = session.get("access_token")
     if access_token:
+        decrypted = decrypt_token(access_token)
         async with httpx.AsyncClient() as client:
             await client.post(
-                f"{KICK_REVOKE_URL}?token={access_token}&token_hint_type=access_token",
+                f"{KICK_REVOKE_URL}?token={decrypted}&token_hint_type=access_token",
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 

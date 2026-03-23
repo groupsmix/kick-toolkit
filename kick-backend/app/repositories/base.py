@@ -9,15 +9,20 @@ This base class extracts those patterns so domain repositories can inherit
 and reduce boilerplate while still writing custom SQL when needed.
 """
 
+import re
 from typing import Optional
 
 from app.services.db import get_conn, _generate_id, _now_iso
+
+_VALID_IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
 class BaseRepository:
     """Lightweight base class for raw-SQL repository modules."""
 
     def __init__(self, table: str) -> None:
+        if not _VALID_IDENTIFIER.match(table):
+            raise ValueError(f"Invalid table name: {table}")
         self.table = table
 
     # ---- helpers available to subclasses ----
