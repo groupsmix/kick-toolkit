@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import (
     CoachAnalyzeRequest,
     CoachSettings,
@@ -23,14 +23,16 @@ router = APIRouter(prefix="/api/coach", tags=["stream-coach"])
 # ---------------------------------------------------------------------------
 
 @router.get("/settings/{channel}")
-async def get_coach_settings(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_coach_settings(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     return await coach_repo.get_settings(channel)
 
 
 @router.put("/settings/{channel}")
 async def update_coach_settings(
-    channel: str, settings: CoachSettings, _session: dict = Depends(require_auth)
+    channel: str, settings: CoachSettings, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     await coach_repo.upsert_settings(
         channel=channel,
         enabled=settings.enabled,
@@ -54,20 +56,21 @@ async def update_coach_settings(
 
 @router.post("/session/start")
 async def start_session(
-    body: StreamSessionCreate, _session: dict = Depends(require_auth)
+    body: StreamSessionCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, body.channel)
     # End any existing active session first
     active = await coach_repo.get_active_session(body.channel)
     if active:
         await coach_repo.end_session(active["id"])
 
-    session = await coach_repo.create_session(body.channel, body.game)
+    coach_session = await coach_repo.create_session(body.channel, body.game)
     logger.info("Stream coaching session started for channel=%s", body.channel)
-    return session
+    return coach_session
 
 
 @router.post("/session/{session_id}/end")
-async def end_session(session_id: str, _session: dict = Depends(require_auth)) -> dict:
+async def end_session(session_id: str, session: dict = Depends(require_auth)) -> dict:
     result = await coach_repo.end_session(session_id)
     if not result:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -76,27 +79,29 @@ async def end_session(session_id: str, _session: dict = Depends(require_auth)) -
 
 
 @router.get("/session/active/{channel}")
-async def get_active_session(channel: str, _session: dict = Depends(require_auth)) -> dict:
-    session = await coach_repo.get_active_session(channel)
-    if not session:
+async def get_active_session(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
+    active = await coach_repo.get_active_session(channel)
+    if not active:
         return {"session": None, "active": False}
-    return {"session": session, "active": True}
+    return {"session": active, "active": True}
 
 
 @router.get("/session/{session_id}")
-async def get_session(session_id: str, _session: dict = Depends(require_auth)) -> dict:
-    session = await coach_repo.get_session(session_id)
-    if not session:
+async def get_session(session_id: str, session: dict = Depends(require_auth)) -> dict:
+    coach_session = await coach_repo.get_session(session_id)
+    if not coach_session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return session
+    return coach_session
 
 
 @router.get("/sessions/{channel}")
 async def list_sessions(
     channel: str,
     limit: int = Query(default=10, le=50),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await coach_repo.list_sessions(channel, limit)
 
 
@@ -106,8 +111,9 @@ async def list_sessions(
 
 @router.post("/analyze")
 async def analyze_stream(
-    body: CoachAnalyzeRequest, _session: dict = Depends(require_auth)
+    body: CoachAnalyzeRequest, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, body.channel)
     result = await coach_service.analyze_stream(
         channel=body.channel,
         session_id=body.session_id,
@@ -121,14 +127,14 @@ async def analyze_stream(
 async def get_suggestions(
     session_id: str,
     include_dismissed: bool = False,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
     return await coach_repo.get_suggestions(session_id, include_dismissed)
 
 
 @router.post("/suggestions/{suggestion_id}/dismiss")
 async def dismiss_suggestion(
-    suggestion_id: str, _session: dict = Depends(require_auth)
+    suggestion_id: str, session: dict = Depends(require_auth)
 ) -> dict:
     success = await coach_repo.dismiss_suggestion(suggestion_id)
     if not success:
@@ -138,7 +144,7 @@ async def dismiss_suggestion(
 
 @router.post("/suggestions/{session_id}/dismiss-all")
 async def dismiss_all_suggestions(
-    session_id: str, _session: dict = Depends(require_auth)
+    session_id: str, session: dict = Depends(require_auth)
 ) -> dict:
     count = await coach_repo.dismiss_all_suggestions(session_id)
     return {"status": "dismissed", "count": count}
@@ -150,12 +156,12 @@ async def dismiss_all_suggestions(
 
 @router.get("/insights/{session_id}")
 async def get_ai_insights(
-    session_id: str, _session: dict = Depends(require_auth)
+    session_id: str, session: dict = Depends(require_auth)
 ) -> dict:
-    session = await coach_repo.get_session(session_id)
-    if not session:
+    coach_session = await coach_repo.get_session(session_id)
+    if not coach_session:
         raise HTTPException(status_code=404, detail="Session not found")
-    insights = await coach_service.get_ai_insights(session["channel"], session_id)
+    insights = await coach_service.get_ai_insights(coach_session["channel"], session_id)
     return {"insights": insights}
 
 
@@ -165,7 +171,7 @@ async def get_ai_insights(
 
 @router.get("/snapshots/{session_id}")
 async def get_snapshots(
-    session_id: str, _session: dict = Depends(require_auth)
+    session_id: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
     return await coach_repo.get_snapshots(session_id)
 
@@ -174,6 +180,7 @@ async def get_snapshots(
 async def get_chat_activity(
     channel: str,
     window_minutes: int = Query(default=30, le=120),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await coach_repo.get_chat_activity_trend(channel, window_minutes)

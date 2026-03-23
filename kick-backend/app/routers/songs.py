@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import SongQueueSettingsUpdate, SongRequestCreate
 from app.repositories import songs as songs_repo
 
@@ -14,7 +14,8 @@ router = APIRouter(prefix="/api/songs", tags=["songs"])
 
 
 @router.get("/settings/{channel}")
-async def get_settings(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_settings(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     settings = await songs_repo.get_settings(channel)
     if settings:
         return settings
@@ -27,8 +28,9 @@ async def get_settings(channel: str, _session: dict = Depends(require_auth)) -> 
 
 @router.post("/settings/{channel}")
 async def update_settings(
-    channel: str, body: SongQueueSettingsUpdate, _session: dict = Depends(require_auth)
+    channel: str, body: SongQueueSettingsUpdate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await songs_repo.upsert_settings(
         channel=channel,
         enabled=body.enabled,
@@ -43,14 +45,16 @@ async def update_settings(
 
 
 @router.get("/queue/{channel}")
-async def get_queue(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def get_queue(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await songs_repo.get_queue(channel)
 
 
 @router.post("/queue/{channel}")
 async def add_request(
-    channel: str, body: SongRequestCreate, _session: dict = Depends(require_auth)
+    channel: str, body: SongRequestCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await songs_repo.add_request(
         channel=channel, username=body.username, title=body.title,
         artist=body.artist, url=body.url, platform=body.platform,
@@ -62,8 +66,9 @@ async def add_request(
 
 @router.post("/queue/{channel}/{song_id}/skip")
 async def skip_song(
-    channel: str, song_id: str, _session: dict = Depends(require_auth)
+    channel: str, song_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await songs_repo.skip_song(channel, song_id)
     if not result:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -72,8 +77,9 @@ async def skip_song(
 
 @router.post("/queue/{channel}/{song_id}/play")
 async def play_song(
-    channel: str, song_id: str, _session: dict = Depends(require_auth)
+    channel: str, song_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await songs_repo.play_song(channel, song_id)
     if not result:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -82,14 +88,16 @@ async def play_song(
 
 @router.delete("/queue/{channel}/{song_id}")
 async def remove_request(
-    channel: str, song_id: str, _session: dict = Depends(require_auth)
+    channel: str, song_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     await songs_repo.remove_request(channel, song_id)
     return {"status": "removed"}
 
 
 @router.delete("/queue/{channel}")
-async def clear_queue(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def clear_queue(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     count = await songs_repo.clear_queue(channel)
     logger.info("Queue cleared for channel=%s (%d songs)", channel, count)
     return {"status": "cleared", "removed": count}
@@ -99,6 +107,7 @@ async def clear_queue(channel: str, _session: dict = Depends(require_auth)) -> d
 async def get_history(
     channel: str,
     limit: int = Query(default=50, le=200),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await songs_repo.get_history(channel, limit)

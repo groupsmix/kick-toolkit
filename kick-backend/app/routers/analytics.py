@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import SnapshotCreate
 from app.repositories import analytics as analytics_repo
 from app.services import analytics as analytics_service
@@ -19,7 +19,8 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 # ---------------------------------------------------------------------------
 
 @router.get("/overview/{channel}")
-async def get_overview(channel: str, _session: dict = Depends(require_auth)) -> dict:
+async def get_overview(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     return await analytics_service.compute_overview(channel)
 
 
@@ -29,8 +30,9 @@ async def get_overview(channel: str, _session: dict = Depends(require_auth)) -> 
 
 @router.post("/snapshots")
 async def create_snapshot(
-    body: SnapshotCreate, _session: dict = Depends(require_auth)
+    body: SnapshotCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, body.channel)
     snap = await analytics_repo.create_snapshot(
         channel=body.channel,
         avg_viewers=body.avg_viewers,
@@ -49,8 +51,9 @@ async def create_snapshot(
 async def get_snapshots(
     channel: str,
     limit: int = Query(default=30, le=90),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await analytics_repo.get_snapshots(channel, limit)
 
 
@@ -60,8 +63,9 @@ async def get_snapshots(
 
 @router.post("/predictions/{channel}")
 async def generate_predictions(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     predictions = await analytics_service.generate_predictions(channel)
     if not predictions:
         raise HTTPException(
@@ -73,8 +77,9 @@ async def generate_predictions(
 
 @router.get("/predictions/{channel}")
 async def get_predictions(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await analytics_repo.get_predictions(channel)
 
 
@@ -84,15 +89,17 @@ async def get_predictions(
 
 @router.post("/comparisons/{channel}")
 async def generate_comparisons(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await analytics_service.generate_comparisons(channel)
 
 
 @router.get("/comparisons/{channel}")
 async def get_comparisons(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await analytics_repo.get_comparisons(channel)
 
 
@@ -101,21 +108,21 @@ async def get_comparisons(
 # ---------------------------------------------------------------------------
 
 @router.post("/stock/refresh")
-async def refresh_stock_scores(_session: dict = Depends(require_auth)) -> list[dict]:
+async def refresh_stock_scores(session: dict = Depends(require_auth)) -> list[dict]:
     return await analytics_service.update_stock_scores()
 
 
 @router.get("/stock/leaderboard")
 async def get_stock_leaderboard(
     limit: int = Query(default=20, le=50),
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
     return await analytics_repo.get_stock_scores(limit)
 
 
 @router.get("/stock/{channel}")
 async def get_stock_score(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> dict:
     score = await analytics_repo.get_stock_score(channel)
     if not score:
@@ -129,7 +136,8 @@ async def get_stock_score(
 
 @router.get("/narrative/{channel}")
 async def get_growth_narrative(
-    channel: str, _session: dict = Depends(require_auth)
+    channel: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     narrative = await analytics_service.get_growth_narrative(channel)
     return {"narrative": narrative}

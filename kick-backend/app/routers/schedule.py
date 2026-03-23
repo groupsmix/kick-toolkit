@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import ScheduleEntryCreate, ScheduleEntryUpdate
 from app.repositories import schedule as schedule_repo
 
@@ -14,14 +14,16 @@ router = APIRouter(prefix="/api/schedule", tags=["schedule"])
 
 
 @router.get("/{channel}")
-async def list_entries(channel: str, _session: dict = Depends(require_auth)) -> list[dict]:
+async def list_entries(channel: str, session: dict = Depends(require_auth)) -> list[dict]:
+    require_channel_owner(session, channel)
     return await schedule_repo.list_entries(channel)
 
 
 @router.post("/{channel}")
 async def create_entry(
-    channel: str, body: ScheduleEntryCreate, _session: dict = Depends(require_auth)
+    channel: str, body: ScheduleEntryCreate, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     result = await schedule_repo.create_entry(
         channel=channel, day_of_week=body.day_of_week,
         start_time=body.start_time, end_time=body.end_time,
@@ -35,8 +37,9 @@ async def create_entry(
 @router.put("/{channel}/{entry_id}")
 async def update_entry(
     channel: str, entry_id: str, body: ScheduleEntryUpdate,
-    _session: dict = Depends(require_auth),
+    session: dict = Depends(require_auth),
 ) -> dict:
+    require_channel_owner(session, channel)
     updates = body.model_dump(exclude_none=True)
     result = await schedule_repo.update_entry(channel, entry_id, **updates)
     if not result:
@@ -47,8 +50,9 @@ async def update_entry(
 
 @router.delete("/{channel}/{entry_id}")
 async def delete_entry(
-    channel: str, entry_id: str, _session: dict = Depends(require_auth)
+    channel: str, entry_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    require_channel_owner(session, channel)
     await schedule_repo.delete_entry(channel, entry_id)
     return {"status": "deleted"}
 
