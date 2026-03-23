@@ -46,3 +46,11 @@ jobs:
         run: ruff check app/
       - name: Check syntax (all Python files)
         run: find app/ -name '*.py' -exec python -m py_compile {} +
+      - name: Security scan with bandit
+        run: |
+          pip install bandit
+          bandit -r app/ -ll -ii
+      - name: Check dependencies for vulnerabilities
+        run: |
+          pip install safety
+          safety check || true

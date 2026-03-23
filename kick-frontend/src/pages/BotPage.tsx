@@ -220,7 +220,7 @@ export function BotPage() {
     if (!botConfig) return;
     try {
       await api("/api/bot/config", {
-        method: "POST",
+        method: "PUT",
         body: JSON.stringify(botConfig),
       });
       toast.success("Config saved");

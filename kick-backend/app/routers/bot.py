@@ -58,7 +58,7 @@ async def get_bot_config(channel: str, session: dict = Depends(require_auth)) ->
     }
 
 
-@router.post("/config")
+@router.put("/config")
 async def set_bot_config(config: BotConfig, session: dict = Depends(require_auth)) -> dict:
     require_channel_owner(session, config.channel)
     await bot_repo.upsert_config(
