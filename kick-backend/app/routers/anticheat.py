@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth, require_channel_owner
+from app.dependencies import require_auth, require_channel_owner, get_channel_from_session
 from app.models.schemas import (
     RaidEvent,
     RaidSettings,
@@ -39,6 +39,7 @@ async def resolve_raid(raid_id: int, session: dict = Depends(require_auth)) -> d
     result = await anticheat_repo.resolve_raid(raid_id)
     if not result:
         raise HTTPException(status_code=404, detail="Raid event not found")
+    require_channel_owner(session, result["channel"])
     logger.info("Raid %d resolved", raid_id)
     return {"status": "resolved", "raid": result}
 
@@ -52,8 +53,15 @@ async def get_raid_settings(session: dict = Depends(require_auth)) -> RaidSettin
 @router.put("/raid-settings")
 async def update_raid_settings(
     settings: RaidSettings,
+    channel: str = "",
     session: dict = Depends(require_auth),
 ) -> RaidSettings:
+    if channel:
+        require_channel_owner(session, channel)
+    else:
+        user_channel = get_channel_from_session(session)
+        if not user_channel:
+            raise HTTPException(status_code=403, detail="Only streamers can modify raid settings")
     result = await anticheat_repo.upsert_raid_settings(
         settings.enabled,
         settings.new_chatter_threshold,
@@ -61,7 +69,7 @@ async def update_raid_settings(
         settings.auto_action,
         settings.min_account_age_days,
     )
-    logger.info("Raid settings updated")
+    logger.info("Raid settings updated by channel=%s", channel or get_channel_from_session(session))
     return RaidSettings(**result)
 
 
@@ -100,6 +108,7 @@ async def analyze_giveaway(
         gw = await row.fetchone()
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, gw["channel"])
 
     flags = await fraud_svc.analyze_giveaway_entries(giveaway_id, gw["channel"])
     return {"giveaway_id": giveaway_id, "fraud_flags": len(flags), "flags": flags}

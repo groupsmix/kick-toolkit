@@ -51,10 +51,12 @@ async def create_entry(
 
 
 @router.delete("/entries/{entry_id}")
-async def delete_entry(entry_id: str, _session: dict = Depends(require_auth)) -> dict:
-    deleted = await revenue_repo.delete_entry(entry_id)
-    if not deleted:
+async def delete_entry(entry_id: str, session: dict = Depends(require_auth)) -> dict:
+    entry = await revenue_repo.get_entry(entry_id)
+    if not entry:
         raise HTTPException(status_code=404, detail="Entry not found")
+    require_channel_owner(session, entry["channel"])
+    await revenue_repo.delete_entry(entry_id)
     return {"deleted": True}
 
 
