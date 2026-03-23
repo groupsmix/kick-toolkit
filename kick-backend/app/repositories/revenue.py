@@ -55,6 +55,7 @@ async def get_entry(entry_id: str) -> dict | None:
     return dict(row) if row else None
 
 
+
 async def delete_entry(entry_id: str) -> bool:
     async with get_conn() as conn:
         cur = await conn.execute(
