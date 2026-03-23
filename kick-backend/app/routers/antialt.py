@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth, require_channel_owner
+from app.dependencies import require_auth, require_channel_owner, get_channel_from_session
 from app.models.schemas import (
     AltCheckRequest,
     AltCheckResult,
@@ -180,13 +180,17 @@ async def check_user(req: AltCheckRequest, session: dict = Depends(require_auth)
 
 
 @router.get("/flagged")
-async def get_flagged(session: dict = Depends(require_auth)) -> list[AltCheckResult]:
+async def get_flagged(channel: str = "", session: dict = Depends(require_auth)) -> list[AltCheckResult]:
+    if channel:
+        require_channel_owner(session, channel)
     rows = await antialt_repo.list_flagged()
     return [AltCheckResult(**row) for row in rows]
 
 
 @router.get("/settings")
-async def get_settings(session: dict = Depends(require_auth)) -> dict:
+async def get_settings(channel: str = "", session: dict = Depends(require_auth)) -> dict:
+    if channel:
+        require_channel_owner(session, channel)
     settings = await antialt_repo.get_settings()
     if not settings:
         return AntiAltSettings().model_dump()
@@ -196,14 +200,27 @@ async def get_settings(session: dict = Depends(require_auth)) -> dict:
 
 
 @router.put("/settings")
-async def update_settings(settings: AntiAltSettings, session: dict = Depends(require_auth)) -> dict:
+async def update_settings(settings: AntiAltSettings, channel: str = "", session: dict = Depends(require_auth)) -> dict:
+    if channel:
+        require_channel_owner(session, channel)
+    else:
+        # Require a valid streamer channel to modify global settings
+        user_channel = get_channel_from_session(session)
+        if not user_channel:
+            raise HTTPException(status_code=403, detail="Only streamers can modify anti-alt settings")
     await antialt_repo.upsert_settings(settings)
-    logger.info("Anti-alt settings updated")
+    logger.info("Anti-alt settings updated by channel=%s", channel or get_channel_from_session(session))
     return settings.model_dump()
 
 
 @router.delete("/flagged/{username}")
-async def remove_flagged(username: str, session: dict = Depends(require_auth)) -> dict:
+async def remove_flagged(username: str, channel: str = "", session: dict = Depends(require_auth)) -> dict:
+    if channel:
+        require_channel_owner(session, channel)
+    else:
+        user_channel = get_channel_from_session(session)
+        if not user_channel:
+            raise HTTPException(status_code=403, detail="Only streamers can remove flagged accounts")
     await antialt_repo.remove_flagged(username)
     logger.info("User %s removed from flagged list", username)
     return {"status": "removed"}

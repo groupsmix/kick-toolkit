@@ -71,6 +71,10 @@ async def start_session(
 
 @router.post("/session/{session_id}/end")
 async def end_session(session_id: str, session: dict = Depends(require_auth)) -> dict:
+    coach_session = await coach_repo.get_session(session_id)
+    if not coach_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_channel_owner(session, coach_session["channel"])
     result = await coach_repo.end_session(session_id)
     if not result:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -92,6 +96,7 @@ async def get_session(session_id: str, session: dict = Depends(require_auth)) ->
     coach_session = await coach_repo.get_session(session_id)
     if not coach_session:
         raise HTTPException(status_code=404, detail="Session not found")
+    require_channel_owner(session, coach_session["channel"])
     return coach_session
 
 
@@ -129,6 +134,10 @@ async def get_suggestions(
     include_dismissed: bool = False,
     session: dict = Depends(require_auth),
 ) -> list[dict]:
+    coach_session = await coach_repo.get_session(session_id)
+    if not coach_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_channel_owner(session, coach_session["channel"])
     return await coach_repo.get_suggestions(session_id, include_dismissed)
 
 
@@ -136,6 +145,10 @@ async def get_suggestions(
 async def dismiss_suggestion(
     suggestion_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    suggestion = await coach_repo.get_suggestion(suggestion_id)
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found or already dismissed")
+    require_channel_owner(session, suggestion["channel"])
     success = await coach_repo.dismiss_suggestion(suggestion_id)
     if not success:
         raise HTTPException(status_code=404, detail="Suggestion not found or already dismissed")
@@ -146,6 +159,10 @@ async def dismiss_suggestion(
 async def dismiss_all_suggestions(
     session_id: str, session: dict = Depends(require_auth)
 ) -> dict:
+    coach_session = await coach_repo.get_session(session_id)
+    if not coach_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_channel_owner(session, coach_session["channel"])
     count = await coach_repo.dismiss_all_suggestions(session_id)
     return {"status": "dismissed", "count": count}
 
@@ -161,6 +178,7 @@ async def get_ai_insights(
     coach_session = await coach_repo.get_session(session_id)
     if not coach_session:
         raise HTTPException(status_code=404, detail="Session not found")
+    require_channel_owner(session, coach_session["channel"])
     insights = await coach_service.get_ai_insights(coach_session["channel"], session_id)
     return {"insights": insights}
 
@@ -173,6 +191,10 @@ async def get_ai_insights(
 async def get_snapshots(
     session_id: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    coach_session = await coach_repo.get_session(session_id)
+    if not coach_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    require_channel_owner(session, coach_session["channel"])
     return await coach_repo.get_snapshots(session_id)
 
 

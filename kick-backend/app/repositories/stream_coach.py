@@ -211,6 +211,16 @@ async def get_suggestions(
     return [dict(r) for r in results]
 
 
+async def get_suggestion(suggestion_id: str) -> dict | None:
+    """Return a single suggestion by ID, or None."""
+    async with get_conn() as conn:
+        row = await conn.execute(
+            "SELECT * FROM coach_suggestions WHERE id = %s", (suggestion_id,),
+        )
+        result = await row.fetchone()
+    return dict(result) if result else None
+
+
 async def dismiss_suggestion(suggestion_id: str) -> bool:
     now = _now_iso()
     async with get_conn() as conn:
