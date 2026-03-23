@@ -15,6 +15,7 @@ jobs:
       node-version: "20"
       package-manager: npm
       working-directory: kick-frontend
+      install-command: "npm ci"
       test-command: "echo 'No tests configured'"
 
   ci-backend:
@@ -25,6 +26,7 @@ jobs:
       python-version: "3.12"
       package-manager: poetry
       working-directory: kick-backend
+      install-command: "poetry install --no-interaction"
       lint-command: "pip install ruff && ruff check app/"
       test-command: "echo 'No tests configured'"
 
@@ -36,6 +38,7 @@ jobs:
       node-version: "20"
       package-manager: npm
       working-directory: kick-frontend
+      install-command: "npm ci"
       run-formatter: false
       run-typecheck: true
       run-coverage: false
@@ -48,6 +51,7 @@ jobs:
       python-version: "3.12"
       package-manager: poetry
       working-directory: kick-backend
+      install-command: "pip install poetry && poetry config virtualenvs.in-project true && poetry install --no-interaction"
       run-formatter: false
       run-typecheck: true
       typecheck-command: "find app/ -name '*.py' -exec python -m py_compile {} +"
@@ -62,3 +66,4 @@ jobs:
       node-version: "20"
       package-manager: npm
       working-directory: kick-frontend
+      install-command: "npm ci"
