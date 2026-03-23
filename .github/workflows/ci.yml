@@ -1,48 +1,72 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main]
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 jobs:
-  frontend:
-    name: Frontend Lint & Typecheck
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: kick-frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: kick-frontend/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npx tsc --noEmit
-      - run: npm run build
+  ci-frontend:
+    name: Frontend CI
+    uses: groupsmix/shared-workflows/.github/workflows/ci.yml@main
+    with:
+      language: node
+      node-version: "20"
+      package-manager: npm
+      working-directory: kick-frontend
+      install-command: "npm ci"
+      lint-command: "npm run lint"
+      test-command: "echo 'No tests configured'"
 
-  backend:
-    name: Backend Lint & Typecheck
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: kick-backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Install dependencies
-        run: poetry install --no-interaction
-      - name: Install ruff
-        run: pip install ruff
-      - name: Lint with ruff
-        run: ruff check app/
-      - name: Check syntax (all Python files)
-        run: find app/ -name '*.py' -exec python -m py_compile {} +
+  ci-backend:
+    name: Backend CI
+    uses: groupsmix/shared-workflows/.github/workflows/ci.yml@main
+    with:
+      language: python
+      python-version: "3.12"
+      package-manager: poetry
+      working-directory: kick-backend
+      install-command: "poetry install --no-interaction"
+      lint-command: "pip install ruff && ruff check app/"
+      test-command: "echo 'No tests configured'"
+
+  quality-frontend:
+    name: Frontend Code Quality
+    uses: groupsmix/shared-workflows/.github/workflows/code-quality.yml@main
+    with:
+      language: node
+      node-version: "20"
+      package-manager: npm
+      working-directory: kick-frontend
+      install-command: "npm ci"
+      run-formatter: false
+      run-typecheck: true
+      typecheck-command: "npx tsc --noEmit"
+      run-coverage: false
+
+  quality-backend:
+    name: Backend Code Quality
+    uses: groupsmix/shared-workflows/.github/workflows/code-quality.yml@main
+    with:
+      language: python
+      python-version: "3.12"
+      package-manager: poetry
+      working-directory: kick-backend
+      install-command: "pip install poetry && poetry config virtualenvs.in-project true && poetry install --no-interaction"
+      run-formatter: false
+      run-typecheck: true
+      typecheck-command: "find app/ -name '*.py' -exec python -m py_compile {} +"
+      run-coverage: false
+
+  build-frontend:
+    name: Frontend Build
+    needs: [ci-frontend, quality-frontend]
+    uses: groupsmix/shared-workflows/.github/workflows/build.yml@main
+    with:
+      language: node
+      node-version: "20"
+      package-manager: npm
+      working-directory: kick-frontend
+      install-command: "npm ci"
+      build-command: "npm run build"

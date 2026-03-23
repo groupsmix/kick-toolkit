@@ -1,0 +1,28 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  security-frontend:
+    name: Frontend Security
+    uses: groupsmix/shared-workflows/.github/workflows/security.yml@main
+    with:
+      language: node
+      node-version: "20"
+      package-manager: npm
+      working-directory: kick-frontend
+
+  security-backend:
+    name: Backend Security
+    uses: groupsmix/shared-workflows/.github/workflows/security.yml@main
+    with:
+      language: python
+      python-version: "3.12"
+      package-manager: poetry
+      working-directory: kick-backend
