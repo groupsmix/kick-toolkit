@@ -45,6 +45,16 @@ async def get_entries(channel: str, limit: int = 100) -> list[dict]:
         return [dict(r) for r in await cur.fetchall()]
 
 
+async def get_entry(entry_id: str) -> dict | None:
+    """Fetch a single revenue entry by ID."""
+    async with get_conn() as conn:
+        cur = await conn.execute(
+            "SELECT * FROM revenue_entries WHERE id = %s", (entry_id,),
+        )
+        row = await cur.fetchone()
+    return dict(row) if row else None
+
+
 async def delete_entry(entry_id: str) -> bool:
     async with get_conn() as conn:
         cur = await conn.execute(
