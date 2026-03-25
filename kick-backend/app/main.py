@@ -37,7 +37,7 @@ from app.routers.polls import router as polls_router
 from app.routers.predictions import router as predictions_router
 from app.routers.translation import router as translation_router
 from app.routers.activity import router as activity_router
-from app.dependencies import require_auth
+from app.dependencies import get_channel_from_session, require_auth, require_channel_owner
 from app.repositories import dashboard as dashboard_repo
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
 from app.services.http_client import close_all as close_all_http_clients
@@ -186,5 +186,9 @@ async def healthz():
 
 
 @app.get("/api/dashboard/stats")
-async def dashboard_stats(_session: dict = Depends(require_auth)):
-    return await dashboard_repo.get_stats()
+async def dashboard_stats(session: dict = Depends(require_auth)):
+    channel = get_channel_from_session(session)
+    if not channel:
+        raise HTTPException(status_code=400, detail="No channel associated with session")
+    require_channel_owner(session, channel)
+    return await dashboard_repo.get_stats(channel)
