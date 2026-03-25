@@ -85,7 +85,7 @@ def _generate_summary(highlights: list[dict]) -> str:
         return "No highlights detected for this stream."
     total = len(highlights)
     peak = max(highlights, key=lambda h: h["intensity"])
-    categories = {}
+    categories: dict[str, int] = {}
     for h in highlights:
         cat = h.get("category", "hype")
         categories[cat] = categories.get(cat, 0) + 1

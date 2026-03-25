@@ -369,6 +369,8 @@ async def get_behavior_profile(
 async def get_risk_model_stats(channel: str, session: dict = Depends(require_auth)) -> RiskModelStats:
     require_channel_owner(session, channel)
     stats = await risk_engine.get_model_stats(channel)
+    if not stats:
+        raise HTTPException(status_code=404, detail="No risk model stats found")
     return RiskModelStats(**stats)
 
 

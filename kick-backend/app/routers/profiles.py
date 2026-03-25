@@ -40,7 +40,7 @@ async def update_my_profile(
     existing = await profiles_repo.get_profile(channel)
     if existing:
         updates = body.model_dump(exclude_none=True)
-        result = await profiles_repo.update_profile(channel, **updates)
+        result = await profiles_repo.update_profile(channel, **updates) or existing
     else:
         result = await profiles_repo.upsert_profile(
             channel=channel,

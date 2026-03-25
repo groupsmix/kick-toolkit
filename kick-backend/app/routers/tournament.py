@@ -174,7 +174,7 @@ async def start_tournament(tournament_id: str, session: dict = Depends(require_a
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         updated = await row.fetchone()
     logger.info("Tournament %s started", tournament_id)
-    return Tournament(**dict(updated))
+    return Tournament(**dict(updated))  # type: ignore[return-value]
 
 
 @router.post("/{tournament_id}/match/{match_id}/winner")
@@ -260,4 +260,4 @@ async def reset_tournament(tournament_id: str, session: dict = Depends(require_a
         await conn.commit()
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         updated = await row.fetchone()
-    return Tournament(**dict(updated))
+    return Tournament(**dict(updated))  # type: ignore[return-value]
