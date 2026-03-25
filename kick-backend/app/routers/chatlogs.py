@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/chatlogs", tags=["chatlogs"])
 
 @router.get("")
 async def get_chat_logs(
-    channel: Optional[str] = None,
+    channel: str = Query(..., description="Channel to query logs for"),
     username: Optional[str] = None,
     flagged_only: bool = False,
     search: Optional[str] = None,
@@ -24,8 +24,7 @@ async def get_chat_logs(
     offset: int = 0,
     session: dict = Depends(require_auth),
 ) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+    require_channel_owner(session, channel)
     logs, total = await chatlogs_repo.query_logs(
         channel=channel, username=username, flagged_only=flagged_only,
         search=search, limit=limit, offset=offset,
@@ -34,8 +33,13 @@ async def get_chat_logs(
 
 
 @router.get("/user/{username}")
-async def get_user_logs(username: str, session: dict = Depends(require_auth)) -> dict:
-    return await chatlogs_repo.get_user_logs(username)
+async def get_user_logs(
+    username: str,
+    channel: str = Query(..., description="Channel to scope the lookup to"),
+    session: dict = Depends(require_auth),
+) -> dict:
+    require_channel_owner(session, channel)
+    return await chatlogs_repo.get_user_logs(username, channel=channel)
 
 
 @router.post("")

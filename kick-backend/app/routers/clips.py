@@ -80,6 +80,7 @@ async def get_clip(
     clip = await clips_repo.get_clip(clip_id)
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
+    require_channel_owner(session, clip["channel"])
     return clip
 
 
@@ -87,9 +88,11 @@ async def get_clip(
 async def delete_clip(
     clip_id: str, session: dict = Depends(require_auth)
 ) -> dict:
-    deleted = await clips_repo.delete_clip(clip_id)
-    if not deleted:
+    clip = await clips_repo.get_clip(clip_id)
+    if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
+    require_channel_owner(session, clip["channel"])
+    await clips_repo.delete_clip(clip_id)
     return {"deleted": True}
 
 
@@ -106,6 +109,7 @@ async def generate_caption(
     clip = await clips_repo.get_clip(clip_id)
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
+    require_channel_owner(session, clip["channel"])
     caption = await clips_service.generate_caption(clip_id, body.style)
     return {"caption": caption}
 
@@ -123,6 +127,7 @@ async def post_clip(
     clip = await clips_repo.get_clip(clip_id)
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
+    require_channel_owner(session, clip["channel"])
     if body.platform not in ("tiktok", "youtube", "instagram"):
         raise HTTPException(status_code=400, detail="Platform must be tiktok, youtube, or instagram")
     return await clips_service.post_to_platform(clip_id, body.platform, body.caption)
@@ -132,4 +137,8 @@ async def post_clip(
 async def get_clip_posts(
     clip_id: str, session: dict = Depends(require_auth)
 ) -> list[dict]:
+    clip = await clips_repo.get_clip(clip_id)
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    require_channel_owner(session, clip["channel"])
     return await clips_repo.get_clip_posts(clip_id)
