@@ -80,6 +80,7 @@ async def _check_rate_limit_redis(
 ) -> bool:
     key = f"rl:{client_ip}"
     now = time.time()
+    assert _redis_client is not None
     pipe = _redis_client.pipeline()
     pipe.zremrangebyscore(key, 0, now - window)
     pipe.zcard(key)
@@ -134,6 +135,7 @@ async def set_cached(key: str, data: dict, ttl: int = 30) -> None:
 
 
 async def _get_cached_redis(key: str) -> Optional[dict]:
+    assert _redis_client is not None
     raw = await _redis_client.get(f"cache:{key}")
     if raw is not None:
         try:
@@ -144,6 +146,7 @@ async def _get_cached_redis(key: str) -> Optional[dict]:
 
 
 async def _set_cached_redis(key: str, data: dict, ttl: int) -> None:
+    assert _redis_client is not None
     await _redis_client.setex(f"cache:{key}", ttl, json.dumps(data))
 
 

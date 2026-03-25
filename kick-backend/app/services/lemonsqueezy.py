@@ -97,9 +97,9 @@ async def create_checkout(
     }
 
     if user_email:
-        payload["data"]["attributes"]["checkout_data"]["email"] = user_email
+        payload["data"]["attributes"]["checkout_data"]["email"] = user_email  # type: ignore[index]
     if user_name:
-        payload["data"]["attributes"]["checkout_data"]["name"] = user_name
+        payload["data"]["attributes"]["checkout_data"]["name"] = user_name  # type: ignore[index]
 
     client = _get_http_client()
     response = await client.post(

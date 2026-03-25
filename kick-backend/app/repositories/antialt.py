@@ -54,7 +54,7 @@ async def get_timeout_threshold() -> float:
 
 async def upsert_settings(settings: object) -> None:
     """Upsert anti-alt settings from an AntiAltSettings model."""
-    data = settings.model_dump() if hasattr(settings, "model_dump") else dict(settings)  # type: ignore[union-attr]
+    data: dict[str, object] = settings.model_dump() if hasattr(settings, "model_dump") else dict(settings)  # type: ignore[union-attr, arg-type, call-overload]
     async with get_conn() as conn:
         await conn.execute(
             """INSERT INTO anti_alt_settings (
