@@ -1,18 +1,10 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-function getAuthHeaders(): Record<string, string> {
-  const sessionId = localStorage.getItem("kick_session_id");
-  if (sessionId) {
-    return { Authorization: `Bearer ${sessionId}` };
-  }
-  return {};
-}
-
 export async function api<T>(path: string, options?: RequestInit, _retryCount = 0): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...getAuthHeaders(),
       ...options?.headers,
     },
     ...options,

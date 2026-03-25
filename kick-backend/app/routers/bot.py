@@ -317,6 +317,14 @@ def _get_http_client() -> httpx.AsyncClient:
     return _http_client
 
 
+async def close_http_client() -> None:
+    """Close the module-level HTTP client, releasing TCP connections."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
+
+
 @mod_router.post("/analyze")
 async def analyze_message(
     msg: ChatMessage,

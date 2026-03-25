@@ -1,8 +1,5 @@
-import asyncio
 import logging
 import os
-import time
-from collections import OrderedDict, deque
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -42,7 +39,11 @@ from app.routers.translation import router as translation_router
 from app.routers.activity import router as activity_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
+from app.routers.antialt import close_http_client as close_antialt_client
+from app.routers.bot import close_http_client as close_bot_client
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
+from app.services.lemonsqueezy import close_http_client as close_lemon_client
+from app.services.redis_cache import init_redis, close_redis, check_rate_limit
 
 # Structured logging setup
 logging.basicConfig(
@@ -54,35 +55,27 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Simple in-memory rate limiter (bounded LRU to prevent memory leaks)
+# Rate limiter — uses Redis when available, falls back to in-memory
 # ---------------------------------------------------------------------------
 
-_RATE_STORE_MAX_KEYS = 10_000
-_rate_store: OrderedDict[str, deque[float]] = OrderedDict()
-_rate_lock = asyncio.Lock()
 RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX = 60     # requests per window
 
 
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP, respecting trusted proxy headers."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 async def _rate_limit(request: Request) -> None:
     """Check rate limit per client IP. Raises 429 if exceeded."""
-    client_ip = request.client.host if request.client else "unknown"
-    now = time.time()
-    async with _rate_lock:
-        timestamps = _rate_store.get(client_ip, deque())
-        # Evict expired from front (O(1) per eviction since timestamps are ordered)
-        while timestamps and now - timestamps[0] >= RATE_LIMIT_WINDOW:
-            timestamps.popleft()
-        if len(timestamps) >= RATE_LIMIT_MAX:
-            _rate_store[client_ip] = timestamps
-            raise HTTPException(status_code=429, detail="Too many requests")
-        timestamps.append(now)
-        _rate_store[client_ip] = timestamps
-        # Move to end (most-recently-used)
-        _rate_store.move_to_end(client_ip)
-        # Evict oldest entries when store exceeds max size
-        while len(_rate_store) > _RATE_STORE_MAX_KEYS:
-            _rate_store.popitem(last=False)
+    client_ip = _get_client_ip(request)
+    allowed = await check_rate_limit(client_ip, RATE_LIMIT_WINDOW, RATE_LIMIT_MAX)
+    if not allowed:
+        raise HTTPException(status_code=429, detail="Too many requests")
 
 
 ALLOWED_ORIGINS = os.environ.get(
@@ -111,9 +104,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     await init_pool()
+    await init_redis()
     await create_tables()
     await seed_demo_data()
     yield
+    # Close HTTP client singletons to release TCP connections / file descriptors
+    await close_antialt_client()
+    await close_bot_client()
+    await close_lemon_client()
+    await close_redis()
     await close_pool()
 
 
@@ -125,11 +124,10 @@ app = FastAPI(
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
-# CSRF Protection: State-changing endpoints use Bearer token auth (Authorization
-# header) which is not automatically attached by browsers, providing inherent CSRF
-# protection. The CORS policy below restricts origins to the frontend domain.
-# If cookie-based auth is ever added, a CSRF token middleware (e.g. starlette-csrf)
-# should be integrated.
+# CSRF note: Cookie-based session auth is now used. The SameSite=Lax attribute on
+# the session cookie prevents CSRF for state-changing requests from cross-origin
+# contexts. The Authorization header fallback is kept for backwards compatibility
+# and API clients. The CORS policy restricts origins to the frontend domain.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

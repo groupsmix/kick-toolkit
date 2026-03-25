@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Request
 
 from app.services.db import get_conn
 
@@ -57,12 +57,23 @@ def require_channel_owner(session: dict, channel: str) -> None:
         raise HTTPException(status_code=403, detail="Access denied: not your channel")
 
 
-async def require_auth(authorization: str = Header(..., description="Bearer <session_id>")) -> dict:
-    """Validate session and return session data. Use as a FastAPI dependency."""
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization header")
+async def require_auth(
+    request: Request,
+    authorization: str = Header(default="", description="Bearer <session_id>"),
+) -> dict:
+    """Validate session and return session data.
 
-    session_id = authorization.removeprefix("Bearer ").strip()
+    Reads the session_id from the ``kick_session_id`` httpOnly cookie first,
+    falling back to the ``Authorization: Bearer <session_id>`` header for
+    backwards compatibility.
+    """
+    session_id = request.cookies.get("kick_session_id", "")
+
+    if not session_id:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        session_id = authorization.removeprefix("Bearer ").strip()
+
     if not session_id:
         raise HTTPException(status_code=401, detail="Missing session ID")
 
