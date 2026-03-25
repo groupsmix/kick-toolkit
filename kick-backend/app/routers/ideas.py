@@ -56,7 +56,7 @@ async def generate_ideas(req: IdeaGenerateRequest, _session: dict = Depends(requ
 
     selected = random.sample(pool, min(5, len(pool)))
 
-    return [GiveawayIdea(id=_generate_id(), **idea, saved=False) for idea in selected]
+    return [GiveawayIdea(id=_generate_id(), **idea, saved=False) for idea in selected]  # type: ignore[arg-type]
 
 
 @router.get("/saved")

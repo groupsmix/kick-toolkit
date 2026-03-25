@@ -229,7 +229,13 @@ async def revoke_session(session_id: str) -> bool:
         decrypted = decrypt_token(access_token)
         async with httpx.AsyncClient() as client:
             await client.post(
-                f"{KICK_REVOKE_URL}?token={decrypted}&token_hint_type=access_token",
+                KICK_REVOKE_URL,
+                data={
+                    "token": decrypted,
+                    "token_type_hint": "access_token",
+                    "client_id": KICK_CLIENT_ID,
+                    "client_secret": KICK_CLIENT_SECRET,
+                },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 

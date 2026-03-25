@@ -50,8 +50,8 @@ async def upsert_profile(
 
 
 async def update_profile(channel: str, **kwargs: object) -> Optional[dict]:
-    set_parts = []
-    values = []
+    set_parts: list[str] = []
+    values: list[object] = []
     for key, value in kwargs.items():
         if value is not None:
             if key == "social_links":

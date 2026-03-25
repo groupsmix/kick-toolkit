@@ -19,6 +19,26 @@ CREATE TABLE IF NOT EXISTS tournaments (
     ended_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS tournament_participants (
+    id TEXT PRIMARY KEY,
+    tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    username TEXT NOT NULL,
+    seed INT,
+    eliminated BOOLEAN NOT NULL DEFAULT FALSE,
+    UNIQUE (tournament_id, username)
+);
+
+CREATE TABLE IF NOT EXISTS tournament_matches (
+    id TEXT PRIMARY KEY,
+    tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    round INT NOT NULL,
+    match_number INT NOT NULL,
+    player1 TEXT,
+    player2 TEXT,
+    winner TEXT,
+    status TEXT NOT NULL DEFAULT 'pending'
+);
+
 CREATE TABLE IF NOT EXISTS saved_ideas (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
