@@ -14,9 +14,8 @@ router = APIRouter(prefix="/api/giveaway", tags=["giveaway"])
 
 
 @router.get("")
-async def list_giveaways(channel: str = "", session: dict = Depends(require_auth)) -> list[Giveaway]:
-    if channel:
-        require_channel_owner(session, channel)
+async def list_giveaways(channel: str, session: dict = Depends(require_auth)) -> list[Giveaway]:
+    require_channel_owner(session, channel)
     rows = await giveaway_repo.list_giveaways(channel)
     return [Giveaway(**row) for row in rows]
 

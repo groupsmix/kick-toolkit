@@ -18,9 +18,8 @@ router = APIRouter(prefix="/api/tournament", tags=["tournament"])
 
 
 @router.get("")
-async def list_tournaments(channel: str = "", session: dict = Depends(require_auth)) -> list[Tournament]:
-    if channel:
-        require_channel_owner(session, channel)
+async def list_tournaments(channel: str, session: dict = Depends(require_auth)) -> list[Tournament]:
+    require_channel_owner(session, channel)
     rows = await tournament_repo.list_tournaments(channel)
     return [Tournament(**row) for row in rows]
 
