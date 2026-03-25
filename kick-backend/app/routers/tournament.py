@@ -238,6 +238,8 @@ async def start_tournament(tournament_id: str, session: dict = Depends(require_a
         await conn.commit()
 
         updated = await _load_tournament_full(conn, tournament_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Tournament not found")
 
     logger.info("Tournament %s started", tournament_id)
     return Tournament(**updated)
@@ -336,6 +338,8 @@ async def set_match_winner(tournament_id: str, match_id: str, winner: str, sessi
         await conn.commit()
 
         updated = await _load_tournament_full(conn, tournament_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Tournament not found")
 
         # Get the updated match for response
         um_row = await conn.execute(
@@ -386,5 +390,7 @@ async def reset_tournament(tournament_id: str, session: dict = Depends(require_a
         await conn.commit()
 
         updated = await _load_tournament_full(conn, tournament_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Tournament not found")
 
     return Tournament(**updated)
