@@ -41,8 +41,11 @@ async def get_insights(
 
 @router.get("/timeline/{session_id}")
 async def get_timeline(
-    session_id: str, session: dict = Depends(require_auth)
+    session_id: str,
+    channel: str = Query(...),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await heatmap_repo.get_heatmap_timeline(session_id)
 
 
@@ -82,8 +85,11 @@ async def add_segment(
 
 @router.get("/segments/{session_id}")
 async def get_segments(
-    session_id: str, session: dict = Depends(require_auth)
+    session_id: str,
+    channel: str = Query(...),
+    session: dict = Depends(require_auth),
 ) -> list[dict]:
+    require_channel_owner(session, channel)
     return await heatmap_repo.get_segments(session_id)
 
 

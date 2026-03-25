@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +61,13 @@ export function GiveawayPage() {
   });
   const [manualEntry, setManualEntry] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,17 +119,17 @@ export function GiveawayPage() {
   const rollWinner = async (gwId: string) => {
     setRolling(gwId);
     const gw = giveaways.find((g) => g.id === gwId);
-    if (!gw) return;
+    if (!gw || gw.entries.length === 0) return;
 
     // Animate rolling through names
-    const entries = gw.entries;
     let count = 0;
-    const interval = setInterval(() => {
-      const randomEntry = entries[Math.floor(Math.random() * entries.length)];
+    intervalRef.current = setInterval(() => {
+      const randomEntry = gw.entries[Math.floor(Math.random() * gw.entries.length)];
       setRollingName(randomEntry.username);
       count++;
       if (count > 20) {
-        clearInterval(interval);
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
         // Actually roll from API
         api<{ winner: string; giveaway: Giveaway }>(`/api/giveaway/${gwId}/roll`, {
           method: "POST",
