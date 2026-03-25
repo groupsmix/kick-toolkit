@@ -49,8 +49,8 @@ def test_all_schemas_contains_all_tables():
 
 
 def test_schema_module_count():
-    """We should have 26 domain modules."""
-    assert len(_ALL_SCHEMAS) == 26
+    """We should have 27 domain modules."""
+    assert len(_ALL_SCHEMAS) == 27
 
 
 def test_each_schema_is_valid_sql():
