@@ -168,7 +168,7 @@ def _advance_byes(matches: list[dict], current_round: int):
 
 
 @router.post("/{tournament_id}/start")
-async def start_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> dict:
+async def start_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> Tournament:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
@@ -363,7 +363,7 @@ async def delete_tournament(tournament_id: str, session: dict = Depends(require_
 
 
 @router.post("/{tournament_id}/reset")
-async def reset_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> dict:
+async def reset_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> Tournament:
     async with get_conn() as conn:
         row = await conn.execute("SELECT * FROM tournaments WHERE id = %s", (tournament_id,))
         t = await row.fetchone()
