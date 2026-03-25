@@ -37,12 +37,10 @@ from app.routers.polls import router as polls_router
 from app.routers.predictions import router as predictions_router
 from app.routers.translation import router as translation_router
 from app.routers.activity import router as activity_router
-from app.dependencies import require_auth
+from app.dependencies import get_channel_from_session, require_auth, require_channel_owner
 from app.repositories import dashboard as dashboard_repo
-from app.routers.antialt import close_http_client as close_antialt_client
-from app.routers.bot import close_http_client as close_bot_client
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
-from app.services.lemonsqueezy import close_http_client as close_lemon_client
+from app.services.http_client import close_all as close_all_http_clients
 from app.services.redis_cache import init_redis, close_redis, check_rate_limit
 
 # Structured logging setup
@@ -62,12 +60,25 @@ RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX = 60     # requests per window
 
 
+# Trusted reverse-proxy IPs (comma-separated).  Only when a request arrives
+# from one of these addresses will the X-Forwarded-For header be trusted.
+TRUSTED_PROXIES: set[str] = {
+    ip.strip()
+    for ip in os.environ.get("TRUSTED_PROXY_IPS", "").split(",")
+    if ip.strip()
+}
+
+
 def _get_client_ip(request: Request) -> str:
-    """Extract real client IP, respecting trusted proxy headers."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Extract real client IP.  Only trusts X-Forwarded-For from configured proxies."""
+    client_ip = request.client.host if request.client else "unknown"
+
+    if TRUSTED_PROXIES and client_ip in TRUSTED_PROXIES:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+
+    return client_ip
 
 
 async def _rate_limit(request: Request) -> None:
@@ -108,10 +119,8 @@ async def lifespan(application: FastAPI):
     await create_tables()
     await seed_demo_data()
     yield
-    # Close HTTP client singletons to release TCP connections / file descriptors
-    await close_antialt_client()
-    await close_bot_client()
-    await close_lemon_client()
+    # Close all shared HTTP client singletons
+    await close_all_http_clients()
     await close_redis()
     await close_pool()
 
@@ -177,5 +186,9 @@ async def healthz():
 
 
 @app.get("/api/dashboard/stats")
-async def dashboard_stats(_session: dict = Depends(require_auth)):
-    return await dashboard_repo.get_stats()
+async def dashboard_stats(session: dict = Depends(require_auth)):
+    channel = get_channel_from_session(session)
+    if not channel:
+        raise HTTPException(status_code=400, detail="No channel associated with session")
+    require_channel_owner(session, channel)
+    return await dashboard_repo.get_stats(channel)

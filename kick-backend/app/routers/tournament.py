@@ -242,7 +242,7 @@ async def start_tournament(tournament_id: str, session: dict = Depends(require_a
             raise HTTPException(status_code=404, detail="Tournament not found")
 
     logger.info("Tournament %s started", tournament_id)
-    return Tournament(**updated)
+    return Tournament(**updated)  # type: ignore[return-value]
 
 
 @router.post("/{tournament_id}/match/{match_id}/winner")
@@ -393,4 +393,4 @@ async def reset_tournament(tournament_id: str, session: dict = Depends(require_a
         if not updated:
             raise HTTPException(status_code=404, detail="Tournament not found")
 
-    return Tournament(**updated)
+    return Tournament(**updated)  # type: ignore[return-value]

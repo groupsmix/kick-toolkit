@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Optional
 
-import httpx
+from app.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +22,6 @@ PLAN_VARIANT_IDS = {
 }
 
 LEMON_API_BASE = "https://api.lemonsqueezy.com/v1"
-
-_http_client: httpx.AsyncClient | None = None
-
-
-def _get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=15.0,
-            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-        )
-    return _http_client
-
-
-async def close_http_client() -> None:
-    """Close the module-level HTTP client, releasing TCP connections."""
-    global _http_client
-    if _http_client is not None:
-        await _http_client.aclose()
-        _http_client = None
 
 
 def _headers() -> dict[str, str]:
@@ -101,7 +81,7 @@ async def create_checkout(
     if user_name:
         payload["data"]["attributes"]["checkout_data"]["name"] = user_name  # type: ignore[index]
 
-    client = _get_http_client()
+    client = get_http_client("lemonsqueezy", timeout=15.0)
     response = await client.post(
         f"{LEMON_API_BASE}/checkouts",
         json=payload,
