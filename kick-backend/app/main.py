@@ -39,10 +39,8 @@ from app.routers.translation import router as translation_router
 from app.routers.activity import router as activity_router
 from app.dependencies import require_auth
 from app.repositories import dashboard as dashboard_repo
-from app.routers.antialt import close_http_client as close_antialt_client
-from app.routers.bot import close_http_client as close_bot_client
 from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
-from app.services.lemonsqueezy import close_http_client as close_lemon_client
+from app.services.http_client import close_all as close_all_http_clients
 from app.services.redis_cache import init_redis, close_redis, check_rate_limit
 
 # Structured logging setup
@@ -121,10 +119,8 @@ async def lifespan(application: FastAPI):
     await create_tables()
     await seed_demo_data()
     yield
-    # Close HTTP client singletons to release TCP connections / file descriptors
-    await close_antialt_client()
-    await close_bot_client()
-    await close_lemon_client()
+    # Close all shared HTTP client singletons
+    await close_all_http_clients()
     await close_redis()
     await close_pool()
 

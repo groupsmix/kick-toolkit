@@ -3,7 +3,6 @@
 import logging
 from datetime import datetime, timezone
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth, require_channel_owner
@@ -35,27 +34,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/antialt", tags=["antialt"])
 
-_http_client: httpx.AsyncClient | None = None
-
-
-def _get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=10.0,
-            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-        )
-    return _http_client
-
-
-async def close_http_client() -> None:
-    """Close the module-level HTTP client, releasing TCP connections."""
-    global _http_client
-    if _http_client is not None:
-        await _http_client.aclose()
-        _http_client = None
-
-
 async def _fetch_kick_user_data(
     username: str, access_token: str,
 ) -> tuple[int, int, bool]:
@@ -63,8 +41,10 @@ async def _fetch_kick_user_data(
 
     Returns (account_age_days, follower_count, is_following).
     """
+    from app.services.http_client import get_http_client
+
     headers = {"Authorization": f"Bearer {access_token}"}
-    client = _get_http_client()
+    client = get_http_client("kick-api")
     # Get channel info by slug to retrieve follower count and creation date
     channel_resp = await client.get(
         f"{KICK_API_BASE}/channels",

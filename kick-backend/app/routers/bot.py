@@ -3,7 +3,6 @@
 import logging
 import os
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.dependencies import require_auth, require_channel_owner
@@ -304,27 +303,6 @@ _CATEGORY_ACTION_MAP: dict[str, str] = {
 }
 
 
-_http_client: httpx.AsyncClient | None = None
-
-
-def _get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=10.0,
-            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-        )
-    return _http_client
-
-
-async def close_http_client() -> None:
-    """Close the module-level HTTP client, releasing TCP connections."""
-    global _http_client
-    if _http_client is not None:
-        await _http_client.aclose()
-        _http_client = None
-
-
 @mod_router.post("/analyze")
 async def analyze_message(
     msg: ChatMessage,
@@ -340,7 +318,9 @@ async def analyze_message(
     if len(msg.message) > 5000:
         raise HTTPException(status_code=400, detail="Message too long (max 5000 chars)")
 
-    client = _get_http_client()
+    from app.services.http_client import get_http_client
+
+    client = get_http_client("openai")
     response = await client.post(
         OPENAI_MODERATION_URL,
         headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},

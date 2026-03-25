@@ -8,27 +8,13 @@ import os
 import re
 from datetime import datetime, timezone
 
-import httpx
-
 from app.repositories import stream_coach as coach_repo
+from app.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-
-_http_client: httpx.AsyncClient | None = None
-
-
-def _get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=15.0,
-            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-        )
-    return _http_client
-
 
 async def analyze_stream(
     channel: str,
@@ -182,7 +168,7 @@ Previous suggestions given: {len(suggestions)}
 Provide brief, actionable coaching tips. Be encouraging but direct. Focus on engagement, content, and viewer retention. Format as a short bulleted list."""
 
     try:
-        client = _get_http_client()
+        client = get_http_client("openai", timeout=15.0)
         response = await client.post(
             OPENAI_CHAT_URL,
             headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
