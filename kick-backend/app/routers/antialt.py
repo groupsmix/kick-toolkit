@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth, require_channel_owner, get_channel_from_session
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import (
     AltCheckRequest,
     AltCheckResult,
@@ -26,6 +26,7 @@ from app.services import auto_verify as verify_svc
 from app.services import behavior_analysis as behavior_svc
 from app.services import challenge as challenge_svc
 from app.services import name_similarity as name_svc
+from app.services.kick_auth import decrypt_token
 from app.services.risk_scoring import risk_engine
 
 KICK_API_BASE = "https://api.kick.com/public/v1"
@@ -97,12 +98,13 @@ async def check_user(req: AltCheckRequest, session: dict = Depends(require_auth)
     if existing:
         return AltCheckResult(**existing)
 
-    access_token = session.get("access_token", "")
-    if not access_token:
+    raw_token = session.get("access_token", "")
+    if not raw_token:
         raise HTTPException(
             status_code=401,
             detail="No Kick access token available. Please re-authenticate.",
         )
+    access_token = decrypt_token(raw_token)
 
     account_age_days, follower_count, is_following = await _fetch_kick_user_data(
         username, access_token,
@@ -180,17 +182,15 @@ async def check_user(req: AltCheckRequest, session: dict = Depends(require_auth)
 
 
 @router.get("/flagged")
-async def get_flagged(channel: str = "", session: dict = Depends(require_auth)) -> list[AltCheckResult]:
-    if channel:
-        require_channel_owner(session, channel)
+async def get_flagged(channel: str, session: dict = Depends(require_auth)) -> list[AltCheckResult]:
+    require_channel_owner(session, channel)
     rows = await antialt_repo.list_flagged()
     return [AltCheckResult(**row) for row in rows]
 
 
 @router.get("/settings")
-async def get_settings(channel: str = "", session: dict = Depends(require_auth)) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+async def get_settings(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     settings = await antialt_repo.get_settings()
     if not settings:
         return AntiAltSettings().model_dump()
@@ -200,27 +200,16 @@ async def get_settings(channel: str = "", session: dict = Depends(require_auth))
 
 
 @router.put("/settings")
-async def update_settings(settings: AntiAltSettings, channel: str = "", session: dict = Depends(require_auth)) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
-    else:
-        # Require a valid streamer channel to modify global settings
-        user_channel = get_channel_from_session(session)
-        if not user_channel:
-            raise HTTPException(status_code=403, detail="Only streamers can modify anti-alt settings")
+async def update_settings(settings: AntiAltSettings, channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await antialt_repo.upsert_settings(settings)
-    logger.info("Anti-alt settings updated by channel=%s", channel or get_channel_from_session(session))
+    logger.info("Anti-alt settings updated by channel=%s", channel)
     return settings.model_dump()
 
 
 @router.delete("/flagged/{username}")
-async def remove_flagged(username: str, channel: str = "", session: dict = Depends(require_auth)) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
-    else:
-        user_channel = get_channel_from_session(session)
-        if not user_channel:
-            raise HTTPException(status_code=403, detail="Only streamers can remove flagged accounts")
+async def remove_flagged(username: str, channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await antialt_repo.remove_flagged(username)
     logger.info("User %s removed from flagged list", username)
     return {"status": "removed"}
@@ -236,7 +225,8 @@ async def auto_verify_user(
 ) -> AutoVerifyResult:
     """Auto-verify a user on first chat message."""
     require_channel_owner(session, req.channel)
-    access_token = session.get("access_token", "")
+    raw_token = session.get("access_token", "")
+    access_token = decrypt_token(raw_token) if raw_token else ""
 
     account_age_days = 0
     follower_count = 0
@@ -274,9 +264,8 @@ async def auto_verify_user(
 
 
 @router.get("/banned-users")
-async def list_banned_users(channel: str = "", session: dict = Depends(require_auth)) -> list[BannedUser]:
-    if channel:
-        require_channel_owner(session, channel)
+async def list_banned_users(channel: str, session: dict = Depends(require_auth)) -> list[BannedUser]:
+    require_channel_owner(session, channel)
     rows = await banned_repo.list_banned(channel)
     return [BannedUser(**r) for r in rows]
 
@@ -292,9 +281,8 @@ async def add_banned_user(user: BannedUser, session: dict = Depends(require_auth
 
 
 @router.delete("/banned-users/{username}")
-async def remove_banned_user(username: str, channel: str = "", session: dict = Depends(require_auth)) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+async def remove_banned_user(username: str, channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     await banned_repo.remove_banned(username, channel)
     logger.info("User %s removed from ban list", username)
     return {"status": "removed"}
@@ -304,9 +292,8 @@ async def remove_banned_user(username: str, channel: str = "", session: dict = D
 
 
 @router.get("/whitelist")
-async def list_whitelisted(channel: str = "", session: dict = Depends(require_auth)) -> list[WhitelistedUser]:
-    if channel:
-        require_channel_owner(session, channel)
+async def list_whitelisted(channel: str, session: dict = Depends(require_auth)) -> list[WhitelistedUser]:
+    require_channel_owner(session, channel)
     rows = await whitelist_repo.list_whitelisted(channel)
     return [WhitelistedUser(**r) for r in rows]
 
@@ -314,11 +301,10 @@ async def list_whitelisted(channel: str = "", session: dict = Depends(require_au
 @router.post("/whitelist/{username}")
 async def whitelist_user(
     username: str,
-    channel: str = "",
+    channel: str,
     session: dict = Depends(require_auth),
 ) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+    require_channel_owner(session, channel)
     await whitelist_repo.add_whitelisted(username, channel, added_by="streamer", reason="Manual whitelist")
     await antialt_repo.whitelist_user(username)
     logger.info("User %s whitelisted", username)
@@ -328,11 +314,10 @@ async def whitelist_user(
 @router.delete("/whitelist/{username}")
 async def remove_whitelisted(
     username: str,
-    channel: str = "",
+    channel: str,
     session: dict = Depends(require_auth),
 ) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+    require_channel_owner(session, channel)
     await whitelist_repo.remove_whitelisted(username, channel)
     logger.info("User %s removed from whitelist", username)
     return {"status": "removed"}
@@ -353,7 +338,8 @@ async def check_challenge(req: ChallengeCheck, session: dict = Depends(require_a
 @router.post("/challenge/verify")
 async def verify_challenge(req: ChallengeCheck, session: dict = Depends(require_auth)) -> dict:
     require_channel_owner(session, req.channel)
-    access_token = session.get("access_token", "")
+    raw_token = session.get("access_token", "")
+    access_token = decrypt_token(raw_token) if raw_token else ""
     is_following = False
     if access_token:
         try:
@@ -366,10 +352,9 @@ async def verify_challenge(req: ChallengeCheck, session: dict = Depends(require_
 
 
 @router.get("/challenges")
-async def list_challenges(channel: str = "", session: dict = Depends(require_auth)) -> list[ChallengeResult]:
-    if channel:
-        require_channel_owner(session, channel)
-    rows = await challenge_svc.list_active_challenges(channel or None)
+async def list_challenges(channel: str, session: dict = Depends(require_auth)) -> list[ChallengeResult]:
+    require_channel_owner(session, channel)
+    rows = await challenge_svc.list_active_challenges(channel)
     return [ChallengeResult(**r) for r in rows]
 
 
@@ -379,11 +364,10 @@ async def list_challenges(channel: str = "", session: dict = Depends(require_aut
 @router.get("/behavior/{username}")
 async def get_behavior_profile(
     username: str,
-    channel: str = "",
+    channel: str,
     session: dict = Depends(require_auth),
 ) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+    require_channel_owner(session, channel)
     profile = await behavior_svc.get_profile(username, channel)
     if not profile:
         return {"username": username, "channel": channel, "message_count": 0}
@@ -394,17 +378,15 @@ async def get_behavior_profile(
 
 
 @router.get("/risk-model/stats")
-async def get_risk_model_stats(channel: str = "", session: dict = Depends(require_auth)) -> RiskModelStats:
-    if channel:
-        require_channel_owner(session, channel)
+async def get_risk_model_stats(channel: str, session: dict = Depends(require_auth)) -> RiskModelStats:
+    require_channel_owner(session, channel)
     stats = await risk_engine.get_model_stats(channel)
     return RiskModelStats(**stats)
 
 
 @router.post("/risk-model/retrain")
-async def retrain_risk_model(channel: str = "", session: dict = Depends(require_auth)) -> dict:
-    if channel:
-        require_channel_owner(session, channel)
+async def retrain_risk_model(channel: str, session: dict = Depends(require_auth)) -> dict:
+    require_channel_owner(session, channel)
     result = await risk_engine.retrain(channel)
     logger.info("Risk model retrain requested for channel=%s: %s", channel, result.get("status"))
     return result

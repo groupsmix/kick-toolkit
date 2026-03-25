@@ -1,5 +1,6 @@
 """Kick API client with in-memory caching for stream and user data."""
 
+import asyncio
 import logging
 import time
 from collections import OrderedDict
@@ -14,25 +15,28 @@ KICK_API_BASE = "https://kick.com/api"
 # LRU cache with TTL and bounded size
 _CACHE_MAX_SIZE = 500
 _cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+_cache_lock = asyncio.Lock()
 CACHE_TTL_SECONDS = 30
 
 
-def _get_cached(key: str) -> Optional[dict]:
+async def _get_cached(key: str) -> Optional[dict]:
     """Return cached value if it exists and hasn't expired."""
-    if key in _cache:
-        ts, data = _cache[key]
-        if time.time() - ts < CACHE_TTL_SECONDS:
-            _cache.move_to_end(key)
-            return data
-        del _cache[key]
-    return None
+    async with _cache_lock:
+        if key in _cache:
+            ts, data = _cache[key]
+            if time.time() - ts < CACHE_TTL_SECONDS:
+                _cache.move_to_end(key)
+                return data
+            del _cache[key]
+        return None
 
 
-def _set_cached(key: str, data: dict) -> None:
-    _cache[key] = (time.time(), data)
-    _cache.move_to_end(key)
-    while len(_cache) > _CACHE_MAX_SIZE:
-        _cache.popitem(last=False)
+async def _set_cached(key: str, data: dict) -> None:
+    async with _cache_lock:
+        _cache[key] = (time.time(), data)
+        _cache.move_to_end(key)
+        while len(_cache) > _CACHE_MAX_SIZE:
+            _cache.popitem(last=False)
 
 
 async def get_channel_info(channel: str) -> Optional[dict]:
@@ -42,7 +46,7 @@ async def get_channel_info(channel: str) -> Optional[dict]:
     or None if the request fails.
     """
     cache_key = f"channel:{channel}"
-    cached = _get_cached(cache_key)
+    cached = await _get_cached(cache_key)
     if cached is not None:
         return cached
 
@@ -68,7 +72,7 @@ async def get_channel_info(channel: str) -> Optional[dict]:
             "follower_count": raw.get("followers_count", 0),
             "avatar_url": raw.get("profile_pic") or raw.get("user", {}).get("profile_pic", ""),
         }
-        _set_cached(cache_key, data)
+        await _set_cached(cache_key, data)
         return data
     except Exception:
         logger.exception("Failed to fetch Kick channel info for %s", channel)
@@ -82,7 +86,7 @@ async def get_user_profile(username: str) -> Optional[dict]:
     is_live, game, title, or None if the request fails.
     """
     cache_key = f"user:{username}"
-    cached = _get_cached(cache_key)
+    cached = await _get_cached(cache_key)
     if cached is not None:
         return cached
 
@@ -108,7 +112,7 @@ async def get_user_profile(username: str) -> Optional[dict]:
             "title": livestream.get("session_title", "") if livestream else "",
             "verified": raw.get("verified", False),
         }
-        _set_cached(cache_key, data)
+        await _set_cached(cache_key, data)
         return data
     except Exception:
         logger.exception("Failed to fetch Kick user profile for %s", username)

@@ -45,29 +45,32 @@ async def query_logs(
     return logs, total
 
 
-async def get_user_logs(username: str) -> dict:
+async def get_user_logs(username: str, *, channel: Optional[str] = None) -> dict:
+    channel_filter = " AND channel = %s" if channel else ""
+    base_params: list = [username, channel] if channel else [username]
+
     async with get_conn() as conn:
         row = await conn.execute(
-            "SELECT * FROM chat_logs WHERE lower(username) = lower(%s) ORDER BY timestamp DESC LIMIT 100",
-            (username,),
+            f"SELECT * FROM chat_logs WHERE lower(username) = lower(%s){channel_filter} ORDER BY timestamp DESC LIMIT 100",
+            tuple(base_params),
         )
         user_logs = [dict(r) for r in await row.fetchall()]
 
         row = await conn.execute(
-            "SELECT count(*) AS cnt FROM chat_logs WHERE lower(username) = lower(%s)",
-            (username,),
+            f"SELECT count(*) AS cnt FROM chat_logs WHERE lower(username) = lower(%s){channel_filter}",
+            tuple(base_params),
         )
         total_messages = (await row.fetchone())["cnt"]
 
         row = await conn.execute(
-            "SELECT count(*) AS cnt FROM chat_logs WHERE lower(username) = lower(%s) AND flagged = TRUE",
-            (username,),
+            f"SELECT count(*) AS cnt FROM chat_logs WHERE lower(username) = lower(%s){channel_filter} AND flagged = TRUE",
+            tuple(base_params),
         )
         flagged_messages = (await row.fetchone())["cnt"]
 
         row = await conn.execute(
-            "SELECT DISTINCT channel FROM chat_logs WHERE lower(username) = lower(%s)",
-            (username,),
+            f"SELECT DISTINCT channel FROM chat_logs WHERE lower(username) = lower(%s){channel_filter}",
+            tuple(base_params),
         )
         channels = [r["channel"] for r in await row.fetchall()]
 

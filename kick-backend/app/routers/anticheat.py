@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import require_auth, require_channel_owner, get_channel_from_session
+from app.dependencies import require_auth, require_channel_owner
 from app.models.schemas import (
     RaidEvent,
     RaidSettings,
@@ -25,12 +25,11 @@ router = APIRouter(prefix="/api/anticheat", tags=["anticheat"])
 
 @router.get("/raids")
 async def list_raids(
-    channel: str = "",
+    channel: str,
     session: dict = Depends(require_auth),
 ) -> list[RaidEvent]:
-    if channel:
-        require_channel_owner(session, channel)
-    rows = await anticheat_repo.list_raids(channel or None)
+    require_channel_owner(session, channel)
+    rows = await anticheat_repo.list_raids(channel)
     return [RaidEvent(**r) for r in rows]
 
 
@@ -53,15 +52,10 @@ async def get_raid_settings(session: dict = Depends(require_auth)) -> RaidSettin
 @router.put("/raid-settings")
 async def update_raid_settings(
     settings: RaidSettings,
-    channel: str = "",
+    channel: str,
     session: dict = Depends(require_auth),
 ) -> RaidSettings:
-    if channel:
-        require_channel_owner(session, channel)
-    else:
-        user_channel = get_channel_from_session(session)
-        if not user_channel:
-            raise HTTPException(status_code=403, detail="Only streamers can modify raid settings")
+    require_channel_owner(session, channel)
     result = await anticheat_repo.upsert_raid_settings(
         settings.enabled,
         settings.new_chatter_threshold,
@@ -69,7 +63,7 @@ async def update_raid_settings(
         settings.auto_action,
         settings.min_account_age_days,
     )
-    logger.info("Raid settings updated by channel=%s", channel or get_channel_from_session(session))
+    logger.info("Raid settings updated by channel=%s", channel)
     return RaidSettings(**result)
 
 

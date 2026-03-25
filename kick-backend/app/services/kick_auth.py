@@ -188,7 +188,7 @@ async def refresh_session(session_id: str) -> Optional[dict]:
                 "grant_type": "refresh_token",
                 "client_id": KICK_CLIENT_ID,
                 "client_secret": KICK_CLIENT_SECRET,
-                "refresh_token": session["refresh_token"],
+                "refresh_token": decrypt_token(session["refresh_token"]),
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
