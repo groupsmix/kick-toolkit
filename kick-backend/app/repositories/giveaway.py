@@ -1,7 +1,7 @@
 """Repository for giveaway data access."""
 
 import json
-import random
+import secrets
 from typing import Optional
 
 from app.services.db import get_conn, _generate_id, _now_iso
@@ -90,7 +90,7 @@ async def roll_winner(giveaway_id: str) -> tuple[str, int, dict]:
         if not entries:
             raise ValueError("no_entries")
 
-        winner = random.choice(entries)
+        winner = secrets.choice(entries)
         now = _now_iso()
         await conn.execute(
             "UPDATE giveaways SET winner = %s, status = 'completed', ended_at = %s WHERE id = %s",
@@ -123,7 +123,7 @@ async def reroll_winner(giveaway_id: str) -> tuple[str, Optional[str], int]:
         if not eligible:
             eligible = entries
 
-        winner = random.choice(eligible)
+        winner = secrets.choice(eligible)
         await conn.execute(
             "UPDATE giveaways SET winner = %s, status = 'completed' WHERE id = %s",
             (winner["username"], giveaway_id),

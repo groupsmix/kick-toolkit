@@ -1,6 +1,8 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,7 +41,7 @@ from app.routers.translation import router as translation_router
 from app.routers.activity import router as activity_router
 from app.dependencies import get_channel_from_session, require_auth, require_channel_owner
 from app.repositories import dashboard as dashboard_repo
-from app.services.db import init_pool, close_pool, create_tables, seed_demo_data
+from app.services.db import get_conn, init_pool, close_pool, create_tables, seed_demo_data
 from app.services.http_client import close_all as close_all_http_clients
 from app.services.redis_cache import init_redis, close_redis, check_rate_limit
 
@@ -70,13 +72,23 @@ TRUSTED_PROXIES: set[str] = {
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract real client IP.  Only trusts X-Forwarded-For from configured proxies."""
+    """Extract real client IP.  Only trusts X-Forwarded-For from configured proxies.
+
+    Uses the rightmost untrusted IP to prevent spoofing via a forged
+    X-Forwarded-For header.
+    """
     client_ip = request.client.host if request.client else "unknown"
 
     if TRUSTED_PROXIES and client_ip in TRUSTED_PROXIES:
         forwarded = request.headers.get("x-forwarded-for", "")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            ips = [ip.strip() for ip in forwarded.split(",")]
+            # Walk from the right; the first IP not in TRUSTED_PROXIES is
+            # the real client IP (rightmost untrusted).
+            for ip in reversed(ips):
+                if ip not in TRUSTED_PROXIES:
+                    return ip
+            return ips[0]
 
     return client_ip
 
@@ -105,11 +117,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; connect-src 'self' https:; "
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self'; "
+            "img-src 'self' https://kick.com https://*.kick.com; "
+            "connect-src 'self' https://api.kick.com https://id.kick.com; "
             "frame-ancestors 'none'"
         )
         return response
+
+
+async def _cleanup_expired_sessions() -> None:
+    """Delete expired sessions and stale pending_auth entries periodically."""
+    while True:
+        try:
+            await asyncio.sleep(3600)  # every hour
+            async with get_conn() as conn:
+                await conn.execute(
+                    "DELETE FROM sessions WHERE expires_at < %s",
+                    (datetime.now(timezone.utc).isoformat(),),
+                )
+                await conn.commit()
+            logger.info("Expired session cleanup completed")
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.exception("Session cleanup failed")
 
 
 @asynccontextmanager
@@ -118,7 +151,9 @@ async def lifespan(application: FastAPI):
     await init_redis()
     await create_tables()
     await seed_demo_data()
+    cleanup_task = asyncio.create_task(_cleanup_expired_sessions())
     yield
+    cleanup_task.cancel()
     # Close all shared HTTP client singletons
     await close_all_http_clients()
     await close_redis()
