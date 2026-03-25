@@ -42,6 +42,7 @@ async def get_tournament(tournament_id: str, session: dict = Depends(require_aut
     t = await tournament_repo.get_by_id(tournament_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
+    require_channel_owner(session, t["channel"])
     return Tournament(**t)
 
 
@@ -53,6 +54,7 @@ async def register_participant(tournament_id: str, participant: TournamentPartic
 
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        require_channel_owner(session, t["channel"])
         if t["status"] != "registration":
             raise HTTPException(status_code=400, detail="Registration is closed")
 
@@ -83,6 +85,7 @@ async def register_batch(tournament_id: str, usernames: list[str], session: dict
 
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        require_channel_owner(session, t["channel"])
 
         participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
         registered = []
@@ -131,6 +134,7 @@ async def start_tournament(tournament_id: str, session: dict = Depends(require_a
         t = await row.fetchone()
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        require_channel_owner(session, t["channel"])
         if t["status"] != "registration":
             raise HTTPException(status_code=400, detail="Tournament already started")
         participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
@@ -181,6 +185,7 @@ async def set_match_winner(tournament_id: str, match_id: str, winner: str, sessi
         t = await row.fetchone()
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        require_channel_owner(session, t["channel"])
         matches = t["matches"] if isinstance(t["matches"], list) else json.loads(t["matches"])
         participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
         match = next((m for m in matches if m["id"] == match_id), None)
@@ -228,6 +233,10 @@ async def set_match_winner(tournament_id: str, match_id: str, winner: str, sessi
 
 @router.delete("/{tournament_id}")
 async def delete_tournament(tournament_id: str, session: dict = Depends(require_auth)) -> dict:
+    t = await tournament_repo.get_by_id(tournament_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    require_channel_owner(session, t["channel"])
     await tournament_repo.delete(tournament_id)
     logger.info("Tournament %s deleted", tournament_id)
     return {"status": "deleted"}
@@ -240,6 +249,7 @@ async def reset_tournament(tournament_id: str, session: dict = Depends(require_a
         t = await row.fetchone()
         if not t:
             raise HTTPException(status_code=404, detail="Tournament not found")
+        require_channel_owner(session, t["channel"])
         participants = t["participants"] if isinstance(t["participants"], list) else json.loads(t["participants"])
         for p in participants:
             p["eliminated"] = False

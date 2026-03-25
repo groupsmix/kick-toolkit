@@ -26,6 +26,7 @@ from app.services import auto_verify as verify_svc
 from app.services import behavior_analysis as behavior_svc
 from app.services import challenge as challenge_svc
 from app.services import name_similarity as name_svc
+from app.services.kick_auth import decrypt_token
 from app.services.risk_scoring import risk_engine
 
 KICK_API_BASE = "https://api.kick.com/public/v1"
@@ -97,12 +98,13 @@ async def check_user(req: AltCheckRequest, session: dict = Depends(require_auth)
     if existing:
         return AltCheckResult(**existing)
 
-    access_token = session.get("access_token", "")
-    if not access_token:
+    raw_token = session.get("access_token", "")
+    if not raw_token:
         raise HTTPException(
             status_code=401,
             detail="No Kick access token available. Please re-authenticate.",
         )
+    access_token = decrypt_token(raw_token)
 
     account_age_days, follower_count, is_following = await _fetch_kick_user_data(
         username, access_token,
@@ -236,7 +238,8 @@ async def auto_verify_user(
 ) -> AutoVerifyResult:
     """Auto-verify a user on first chat message."""
     require_channel_owner(session, req.channel)
-    access_token = session.get("access_token", "")
+    raw_token = session.get("access_token", "")
+    access_token = decrypt_token(raw_token) if raw_token else ""
 
     account_age_days = 0
     follower_count = 0
@@ -353,7 +356,8 @@ async def check_challenge(req: ChallengeCheck, session: dict = Depends(require_a
 @router.post("/challenge/verify")
 async def verify_challenge(req: ChallengeCheck, session: dict = Depends(require_auth)) -> dict:
     require_channel_owner(session, req.channel)
-    access_token = session.get("access_token", "")
+    raw_token = session.get("access_token", "")
+    access_token = decrypt_token(raw_token) if raw_token else ""
     is_following = False
     if access_token:
         try:
