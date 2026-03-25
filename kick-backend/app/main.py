@@ -62,12 +62,25 @@ RATE_LIMIT_WINDOW = 60  # seconds
 RATE_LIMIT_MAX = 60     # requests per window
 
 
+# Trusted reverse-proxy IPs (comma-separated).  Only when a request arrives
+# from one of these addresses will the X-Forwarded-For header be trusted.
+TRUSTED_PROXIES: set[str] = {
+    ip.strip()
+    for ip in os.environ.get("TRUSTED_PROXY_IPS", "").split(",")
+    if ip.strip()
+}
+
+
 def _get_client_ip(request: Request) -> str:
-    """Extract real client IP, respecting trusted proxy headers."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """Extract real client IP.  Only trusts X-Forwarded-For from configured proxies."""
+    client_ip = request.client.host if request.client else "unknown"
+
+    if TRUSTED_PROXIES and client_ip in TRUSTED_PROXIES:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+
+    return client_ip
 
 
 async def _rate_limit(request: Request) -> None:
