@@ -11,24 +11,15 @@ export function AuthCallbackPage() {
     const code = params.get("code");
     const state = params.get("state");
 
-    // Read session_id from the URL fragment (#session_id=...) instead of
-    // query params to prevent it from leaking via Referer headers.
-    const fragment = window.location.hash.replace(/^#/, "");
-    const fragmentParams = new URLSearchParams(fragment);
-    const sessionId = fragmentParams.get("session_id");
-
-    // Case 1: Redirected back from backend with session_id
-    if (sessionId) {
-      localStorage.setItem("kick_session_id", sessionId);
-      // Full navigation to root — triggers a clean mount of AuthProvider
-      // which will read the new session_id and validate it.
+    // Case 1: Redirected back from backend after token exchange.
+    // The session cookie was already set by the backend — just go home.
+    if (!code && !state) {
       window.location.href = "/";
       return;
     }
 
     // Case 2: Direct OAuth callback with code + state (backend handles exchange)
     if (code && state) {
-      // Redirect to backend callback endpoint which will exchange the code
       const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
       window.location.href = `${apiUrl}/api/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
       return;

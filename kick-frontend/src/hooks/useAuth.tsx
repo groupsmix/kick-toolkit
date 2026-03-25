@@ -59,15 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Validate session on mount — skip on the OAuth callback page to avoid
   // a race condition where we'd call /api/auth/me before the token exchange
-  // has completed, get a 401, and clear the session_id from localStorage.
+  // has completed, get a 401, and clear the session cookie.
   useEffect(() => {
     if (window.location.pathname === "/auth/callback") {
-      setLoading(false);
-      return;
-    }
-
-    const sessionId = localStorage.getItem("kick_session_id");
-    if (!sessionId) {
       setLoading(false);
       return;
     }
@@ -80,7 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        localStorage.removeItem("kick_session_id");
         setUser(null);
       })
       .finally(() => setLoading(false));
@@ -89,22 +82,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [scheduleRefresh, clearRefreshTimer]);
 
   const login = useCallback(async () => {
-    const data = await api<{ auth_url: string; session_id: string }>("/api/auth/login");
-    localStorage.setItem("kick_session_id", data.session_id);
+    const data = await api<{ auth_url: string }>("/api/auth/login");
     window.location.href = data.auth_url;
   }, []);
 
   const logout = useCallback(async () => {
     clearRefreshTimer();
-    const sessionId = localStorage.getItem("kick_session_id");
-    if (sessionId) {
-      try {
-        await api("/api/auth/logout", { method: "POST" });
-      } catch {
-        // Ignore errors during logout
-      }
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Ignore errors during logout
     }
-    localStorage.removeItem("kick_session_id");
     setUser(null);
   }, [clearRefreshTimer]);
 

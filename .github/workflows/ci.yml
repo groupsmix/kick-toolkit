@@ -29,7 +29,7 @@ jobs:
       working-directory: kick-backend
       install-command: "poetry install --no-interaction"
       lint-command: "pip install ruff && ruff check app/"
-      test-command: "echo 'No tests configured'"
+      test-command: "poetry run pytest tests/ -v --tb=short"
 
   quality-frontend:
     name: Frontend Code Quality
@@ -56,7 +56,7 @@ jobs:
       install-command: "pip install poetry && poetry config virtualenvs.in-project true && poetry install --no-interaction"
       run-formatter: false
       run-typecheck: true
-      typecheck-command: "find app/ -name '*.py' -exec python -m py_compile {} +"
+      typecheck-command: "poetry run mypy app/ --ignore-missing-imports"
       run-coverage: false
 
   build-frontend:

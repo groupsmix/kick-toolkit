@@ -1,6 +1,7 @@
 """Kick OAuth 2.1 authentication routes."""
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, Response, HTTPException
 from fastapi.responses import RedirectResponse
@@ -18,21 +19,34 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+_COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
+_COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN", "") or None
+SESSION_COOKIE_NAME = "kick_session_id"
+
 
 @router.get("/login")
-async def login():
+async def login(response: Response):
     """Generate Kick OAuth URL and return it to the frontend."""
     url, session_id = await create_auth_url()
-    return {"auth_url": url, "session_id": session_id}
+    # Set httpOnly cookie so the frontend never needs to handle the session_id
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        domain=_COOKIE_DOMAIN,
+        path="/",
+    )
+    return {"auth_url": url}
 
 
 @router.get("/callback")
 async def callback(code: str, state: str, response: Response):
     """Handle OAuth callback from Kick — exchange code for tokens.
 
-    The session_id is passed via a URL fragment (#) instead of a query param
-    so that it is never sent to the server in Referer headers or logged in
-    server access logs.
+    Sets an httpOnly cookie with the session_id so the frontend never
+    touches the credential directly.
     """
     result = await exchange_code(code, state)
     if not result:
@@ -42,11 +56,17 @@ async def callback(code: str, state: str, response: Response):
     session_id = result["session_id"]
     logger.info("OAuth exchange succeeded, session=%s", session_id[:8])
 
-    # Use fragment (#) instead of query param (?) to prevent session_id from
-    # leaking via Referer headers, server logs, and browser history.
-    redirect_url = f"{FRONTEND_URL}/auth/callback#session_id={session_id}"
+    redirect_url = f"{FRONTEND_URL}/auth/callback"
     resp = RedirectResponse(url=redirect_url)
-    # Prevent the redirect URL from being cached or stored in browser history
+    resp.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        domain=_COOKIE_DOMAIN,
+        path="/",
+    )
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["Referrer-Policy"] = "no-referrer"
     return resp
@@ -87,10 +107,18 @@ async def refresh(session: dict = Depends(require_auth)):
 
 
 @router.post("/logout")
-async def logout(session: dict = Depends(require_auth)):
-    """Revoke tokens and clear session (uses Authorization header)."""
+async def logout(response: Response, session: dict = Depends(require_auth)):
+    """Revoke tokens, clear session, and delete the session cookie."""
     session_id = session["session_id"]
     success = await revoke_session(session_id)
     if not success:
         raise HTTPException(status_code=400, detail="Logout failed")
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        httponly=True,
+        secure=_COOKIE_SECURE,
+        samesite="lax",
+        domain=_COOKIE_DOMAIN,
+        path="/",
+    )
     return {"status": "logged_out"}
