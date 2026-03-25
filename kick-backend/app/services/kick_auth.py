@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from app.services.db import get_conn
 
@@ -21,24 +21,40 @@ logger = logging.getLogger(__name__)
 
 # Token encryption at rest — generate once with Fernet.generate_key(), store in env
 TOKEN_ENCRYPTION_KEY = os.environ.get("TOKEN_ENCRYPTION_KEY", "")
+
+if not TOKEN_ENCRYPTION_KEY:
+    import warnings
+
+    warnings.warn(
+        "TOKEN_ENCRYPTION_KEY is not set! OAuth tokens will be stored in PLAINTEXT. "
+        "Generate one with: python -c "
+        '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"',
+        stacklevel=1,
+    )
+
 _fernet = Fernet(TOKEN_ENCRYPTION_KEY.encode()) if TOKEN_ENCRYPTION_KEY else None
 
 
 def encrypt_token(token: str) -> str:
-    """Encrypt a token for storage. Falls back to plaintext when key is not configured."""
-    if _fernet and token:
-        return _fernet.encrypt(token.encode()).decode()
-    return token
+    """Encrypt a token for storage. Logs a warning when encryption is unavailable."""
+    if not token:
+        return token
+    if _fernet is None:
+        logger.warning("TOKEN_ENCRYPTION_KEY not set — storing token in plaintext!")
+        return token
+    return _fernet.encrypt(token.encode()).decode()
 
 
 def decrypt_token(encrypted: str) -> str:
-    """Decrypt a stored token. Gracefully handles plaintext values during migration."""
-    if _fernet and encrypted:
-        try:
-            return _fernet.decrypt(encrypted.encode()).decode()
-        except Exception:
-            return encrypted  # Already plaintext (migration period)
-    return encrypted
+    """Decrypt a stored token. Handles plaintext values during migration."""
+    if not encrypted or _fernet is None:
+        return encrypted
+    try:
+        return _fernet.decrypt(encrypted.encode()).decode()
+    except InvalidToken:
+        # Likely a plaintext token from before encryption was enabled
+        logger.info("Token appears to be plaintext (migration period)")
+        return encrypted
 
 KICK_AUTH_URL = "https://id.kick.com/oauth/authorize"
 KICK_TOKEN_URL = "https://id.kick.com/oauth/token"
@@ -229,7 +245,13 @@ async def revoke_session(session_id: str) -> bool:
         decrypted = decrypt_token(access_token)
         async with httpx.AsyncClient() as client:
             await client.post(
-                f"{KICK_REVOKE_URL}?token={decrypted}&token_hint_type=access_token",
+                KICK_REVOKE_URL,
+                data={
+                    "token": decrypted,
+                    "token_type_hint": "access_token",
+                    "client_id": KICK_CLIENT_ID,
+                    "client_secret": KICK_CLIENT_SECRET,
+                },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
 
