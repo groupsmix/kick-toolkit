@@ -14,6 +14,7 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
 from app.services.db import get_conn
+from app.services.http_client import get_http_client
 
 SESSION_LIFETIME_HOURS = int(os.environ.get("SESSION_LIFETIME_HOURS", "168"))  # 7 days
 
@@ -23,31 +24,25 @@ logger = logging.getLogger(__name__)
 TOKEN_ENCRYPTION_KEY = os.environ.get("TOKEN_ENCRYPTION_KEY", "")
 
 if not TOKEN_ENCRYPTION_KEY:
-    import warnings
-
-    warnings.warn(
-        "TOKEN_ENCRYPTION_KEY is not set! OAuth tokens will be stored in PLAINTEXT. "
+    raise RuntimeError(
+        "FATAL: TOKEN_ENCRYPTION_KEY is required. OAuth tokens MUST be encrypted at rest. "
         "Generate one with: python -c "
-        '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"',
-        stacklevel=1,
+        '"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
 
-_fernet = Fernet(TOKEN_ENCRYPTION_KEY.encode()) if TOKEN_ENCRYPTION_KEY else None
+_fernet = Fernet(TOKEN_ENCRYPTION_KEY.encode())
 
 
 def encrypt_token(token: str) -> str:
-    """Encrypt a token for storage. Logs a warning when encryption is unavailable."""
+    """Encrypt a token for storage."""
     if not token:
-        return token
-    if _fernet is None:
-        logger.warning("TOKEN_ENCRYPTION_KEY not set — storing token in plaintext!")
         return token
     return _fernet.encrypt(token.encode()).decode()
 
 
 def decrypt_token(encrypted: str) -> str:
     """Decrypt a stored token. Handles plaintext values during migration."""
-    if not encrypted or _fernet is None:
+    if not encrypted:
         return encrypted
     try:
         return _fernet.decrypt(encrypted.encode()).decode()
@@ -85,8 +80,14 @@ async def create_auth_url() -> tuple[str, str]:
 
     async with get_conn() as conn:
         await conn.execute(
-            "INSERT INTO pending_auth (state, code_verifier, session_id) VALUES (%s, %s, %s)",
-            (state, code_verifier, session_id),
+            "INSERT INTO pending_auth (state, code_verifier, session_id, created_at) VALUES (%s, %s, %s, %s)",
+            (state, code_verifier, session_id, datetime.now(timezone.utc).isoformat()),
+        )
+        # Purge stale pending_auth entries older than 10 minutes
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+        await conn.execute(
+            "DELETE FROM pending_auth WHERE created_at < %s",
+            (cutoff,),
         )
         await conn.commit()
 
@@ -120,43 +121,43 @@ async def exchange_code(code: str, state: str) -> Optional[dict]:
     session_id = auth_data["session_id"]
     code_verifier = auth_data["code_verifier"]
 
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            KICK_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "client_id": KICK_CLIENT_ID,
-                "client_secret": KICK_CLIENT_SECRET,
-                "redirect_uri": KICK_REDIRECT_URI,
-                "code_verifier": code_verifier,
-                "code": code,
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
+    client = get_http_client("kick_auth")
+    token_response = await client.post(
+        KICK_TOKEN_URL,
+        data={
+            "grant_type": "authorization_code",
+            "client_id": KICK_CLIENT_ID,
+            "client_secret": KICK_CLIENT_SECRET,
+            "redirect_uri": KICK_REDIRECT_URI,
+            "code_verifier": code_verifier,
+            "code": code,
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
 
-        if token_response.status_code != 200:
-            logger.error("Token exchange failed: status=%s body=%s", token_response.status_code, token_response.text[:200])
-            return None
+    if token_response.status_code != 200:
+        logger.error("Token exchange failed: status=%s body=%s", token_response.status_code, token_response.text[:200])
+        return None
 
-        token_data = token_response.json()
-        logger.info("Token exchange succeeded, fetching user info")
+    token_data = token_response.json()
+    logger.info("Token exchange succeeded, fetching user info")
 
-        user_response = await client.get(
-            KICK_USER_URL,
-            headers={"Authorization": f"Bearer {token_data['access_token']}"},
-        )
+    user_response = await client.get(
+        KICK_USER_URL,
+        headers={"Authorization": f"Bearer {token_data['access_token']}"},
+    )
 
-        user_data = {}
-        if user_response.status_code == 200:
-            user_json = user_response.json()
-            if "data" in user_json and isinstance(user_json["data"], list) and len(user_json["data"]) > 0:
-                user_data = user_json["data"][0]
-            elif "data" in user_json and isinstance(user_json["data"], dict):
-                user_data = user_json["data"]
-            else:
-                user_data = user_json
+    user_data = {}
+    if user_response.status_code == 200:
+        user_json = user_response.json()
+        if "data" in user_json and isinstance(user_json["data"], list) and len(user_json["data"]) > 0:
+            user_data = user_json["data"][0]
+        elif "data" in user_json and isinstance(user_json["data"], dict):
+            user_data = user_json["data"]
         else:
-            logger.warning("User info fetch failed: status=%s", user_response.status_code)
+            user_data = user_json
+    else:
+        logger.warning("User info fetch failed: status=%s", user_response.status_code)
 
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(hours=SESSION_LIFETIME_HOURS)
@@ -197,22 +198,22 @@ async def refresh_session(session_id: str) -> Optional[dict]:
     if not session or not session.get("refresh_token"):
         return None
 
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            KICK_TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "client_id": KICK_CLIENT_ID,
-                "client_secret": KICK_CLIENT_SECRET,
-                "refresh_token": decrypt_token(session["refresh_token"]),
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
+    client = get_http_client("kick_auth")
+    response = await client.post(
+        KICK_TOKEN_URL,
+        data={
+            "grant_type": "refresh_token",
+            "client_id": KICK_CLIENT_ID,
+            "client_secret": KICK_CLIENT_SECRET,
+            "refresh_token": decrypt_token(session["refresh_token"]),
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
 
-        if response.status_code != 200:
-            return None
+    if response.status_code != 200:
+        return None
 
-        token_data = response.json()
+    token_data = response.json()
 
     async with get_conn() as conn:
         await conn.execute(
@@ -243,17 +244,17 @@ async def revoke_session(session_id: str) -> bool:
     access_token = session.get("access_token")
     if access_token:
         decrypted = decrypt_token(access_token)
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                KICK_REVOKE_URL,
-                data={
-                    "token": decrypted,
-                    "token_type_hint": "access_token",
-                    "client_id": KICK_CLIENT_ID,
-                    "client_secret": KICK_CLIENT_SECRET,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
+        client = get_http_client("kick_auth")
+        await client.post(
+            KICK_REVOKE_URL,
+            data={
+                "token": decrypted,
+                "token_type_hint": "access_token",
+                "client_id": KICK_CLIENT_ID,
+                "client_secret": KICK_CLIENT_SECRET,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
 
     return True
 

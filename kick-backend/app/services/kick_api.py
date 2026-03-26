@@ -7,8 +7,7 @@ back to an in-memory LRU cache.
 import logging
 from typing import Optional
 
-import httpx
-
+from app.services.http_client import get_http_client
 from app.services.redis_cache import get_cached, set_cached
 
 logger = logging.getLogger(__name__)
@@ -30,11 +29,11 @@ async def get_channel_info(channel: str) -> Optional[dict]:
         return cached
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{KICK_API_BASE}/v2/channels/{channel}",
-                headers={"Accept": "application/json"},
-            )
+        client = get_http_client("kick_api", timeout=10.0)
+        resp = await client.get(
+            f"{KICK_API_BASE}/v2/channels/{channel}",
+            headers={"Accept": "application/json"},
+        )
         if resp.status_code != 200:
             logger.warning("Kick API returned %s for channel %s", resp.status_code, channel)
             return None
@@ -70,11 +69,11 @@ async def get_user_profile(username: str) -> Optional[dict]:
         return cached
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{KICK_API_BASE}/v2/channels/{username}",
-                headers={"Accept": "application/json"},
-            )
+        client = get_http_client("kick_api", timeout=10.0)
+        resp = await client.get(
+            f"{KICK_API_BASE}/v2/channels/{username}",
+            headers={"Accept": "application/json"},
+        )
         if resp.status_code != 200:
             logger.warning("Kick API returned %s for user %s", resp.status_code, username)
             return None

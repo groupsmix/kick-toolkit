@@ -38,11 +38,16 @@ async def get_giveaway(giveaway_id: str, session: dict = Depends(require_auth)) 
     gw = await giveaway_repo.get_by_id(giveaway_id)
     if not gw:
         raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, gw["channel"])
     return Giveaway(**gw)
 
 
 @router.post("/{giveaway_id}/enter")
 async def enter_giveaway(giveaway_id: str, entry: GiveawayEntry, session: dict = Depends(require_auth)) -> dict:
+    gw = await giveaway_repo.get_by_id(giveaway_id)
+    if not gw:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    require_channel_owner(session, gw["channel"])
     try:
         entry_data, total = await giveaway_repo.add_entry(giveaway_id, entry.username)
     except ValueError as e:

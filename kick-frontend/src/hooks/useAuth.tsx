@@ -49,8 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (result.expires_in) {
             scheduleRefresh(result.expires_in);
           }
-        } catch {
-          // Refresh failed — user will be prompted to re-authenticate on next API call
+        } catch (err) {
+          console.warn("Token refresh failed:", err);
+          setUser(null);
         }
       }, delayMs);
     },

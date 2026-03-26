@@ -13,8 +13,9 @@ export async function api<T>(path: string, options?: RequestInit, _retryCount = 
   // Handle rate limiting with automatic retry
   if (res.status === 429 && _retryCount < 3) {
     const retryAfter = parseInt(res.headers.get("Retry-After") || "0", 10);
-    const delayMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(1000 * 2 ** _retryCount, 8000);
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    const baseDelay = retryAfter > 0 ? retryAfter * 1000 : Math.min(1000 * 2 ** _retryCount, 8000);
+    const jitter = Math.random() * baseDelay * 0.5;
+    await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter));
     return api<T>(path, options, _retryCount + 1);
   }
 

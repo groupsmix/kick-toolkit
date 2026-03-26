@@ -13,6 +13,7 @@ from app.services.kick_auth import (
     refresh_session,
     revoke_session,
     FRONTEND_URL,
+    SESSION_LIFETIME_HOURS,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ async def login(response: Response):
         samesite="lax",
         domain=_COOKIE_DOMAIN,
         path="/",
+        max_age=SESSION_LIFETIME_HOURS * 3600,
     )
     return {"auth_url": url}
 
@@ -66,6 +68,7 @@ async def callback(code: str, state: str, response: Response):
         samesite="lax",
         domain=_COOKIE_DOMAIN,
         path="/",
+        max_age=SESSION_LIFETIME_HOURS * 3600,
     )
     resp.headers["Cache-Control"] = "no-store"
     resp.headers["Referrer-Policy"] = "no-referrer"
